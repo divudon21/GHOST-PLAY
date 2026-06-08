@@ -7,16 +7,13 @@ import android.provider.Settings
 import android.app.Activity
 import android.content.Context
 import android.media.AudioManager
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
 import com.ghost.io.R
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,13 +21,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -65,7 +58,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -73,7 +65,6 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
-import androidx.media3.ui.SubtitleView
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
@@ -103,7 +94,7 @@ fun PlayerScreen(url: String) {
     val coroutineScope = rememberCoroutineScope()
     val settingsRepository = remember { SettingsRepository(context) }
 
-    // Lock state
+    // Lock state - using rememberSavedInstanceState to survive recomposition
     var isLocked by remember { mutableStateOf(false) }
     var showUnlockButton by remember { mutableStateOf(false) }
     
@@ -114,7 +105,6 @@ fun PlayerScreen(url: String) {
     var showQualityDialog by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
-    var showAspectRatioDialog by remember { mutableStateOf(false) }
     
     // Collect settings
     val decoderPriority by settingsRepository.decoderPriority.collectAsState(initial = DecoderPriority.PREFER_DEVICE)
@@ -126,7 +116,6 @@ fun PlayerScreen(url: String) {
     val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
     val appColorPreference by settingsRepository.colorPreference.collectAsState(initial = AppColorPreference.PURPLE)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
-    val volumeBoostEnabled by settingsRepository.volumeBoostEnabled.collectAsState(initial = false)
 
     // Immersive Mode
     DisposableEffect(Unit) {
@@ -167,18 +156,6 @@ fun PlayerScreen(url: String) {
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
                 
                 activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
-        }
-    }
-    
-    // Handle lock state changes
-    LaunchedEffect(isLocked) {
-        playerViewRef?.let { playerView ->
-            if (isLocked) {
-                playerView.useController = false
-                playerView.hideController()
-            } else {
-                playerView.useController = true
             }
         }
     }
@@ -449,16 +426,14 @@ fun PlayerScreen(url: String) {
                     keepScreenOn = true
 
                     subtitleView?.apply {
-                        // Apply embedded styles setting
                         setApplyEmbeddedFontSizes(subtitleEmbeddedStyles)
                         setApplyEmbeddedStyles(subtitleEmbeddedStyles)
                         
-                        // Always set text size - user preference
-                        setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
-
-                        // Apply custom style
                         if (!subtitleEmbeddedStyles) {
-                            // Full custom style when embedded styles disabled
+                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
+                        }
+
+                        if (!subtitleEmbeddedStyles) {
                             val typeface = when (subtitleFont) {
                                 SubtitleFont.DEFAULT -> Typeface.DEFAULT
                                 SubtitleFont.MONOSPACE -> Typeface.MONOSPACE
@@ -476,7 +451,6 @@ fun PlayerScreen(url: String) {
                             )
                             setStyle(style)
                         } else {
-                            // For styled subtitles - minimal style that doesn't override colors
                             val fallbackStyle = CaptionStyleCompat(
                                 android.graphics.Color.WHITE,
                                 if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
@@ -570,7 +544,45 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showAspectRatioDialog = true }
+                        setClickFeedback {
+                            val wrapper = ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault)
+                            val popup = PopupMenu(wrapper, this@apply)
+                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIT, 0, "Original (Fit)")
+                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FILL, 1, "Stretch (Fill)")
+                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_ZOOM, 2, "Crop (Zoom)")
+                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, 3, "16:9")
+                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, 4, "18:9")
+                            popup.menu.add(0, 5, 5, "19:9")
+                            popup.menu.add(0, 6, 6, "20:9")
+                            popup.menu.add(0, 7, 7, "21:9")
+                            
+                            popup.setOnMenuItemClickListener { item ->
+                                when (item.itemId) {
+                                    AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                                    AspectRatioFrameLayout.RESIZE_MODE_FILL,
+                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
+                                    AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
+                                    AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> {
+                                        setAspectRatioListener(null)
+                                        resizeMode = item.itemId
+                                    }
+                                    5 -> {
+                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                        setAspectRatioListener { _, _, _ -> 19f / 9f }
+                                    }
+                                    6 -> {
+                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                        setAspectRatioListener { _, _, _ -> 20f / 9f }
+                                    }
+                                    7 -> {
+                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                        setAspectRatioListener { _, _, _ -> 21f / 9f }
+                                    }
+                                }
+                                true
+                            }
+                            popup.show()
+                        }
                     }
                     
                     // PiP Button
@@ -639,212 +651,45 @@ fun PlayerScreen(url: String) {
                         basicControls.addView(qualityButton, insertIndex + 5)
                     }
                     
-                    // Gesture handling
-                    var scale = 1f
-                    var transX = 0f
-                    var transY = 0f
-                    
-                    var isBrightnessScroll = false
-                    var isVolumeScroll = false
-                    var accumulatedVolume = 0f
-                    var trackedBrightness = -1f  // Track brightness across gestures
-                    
-                    val scaleDetector = if (gestureZoomEnabled) {
-                        android.view.ScaleGestureDetector(ctx, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                            override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
-                                scale *= detector.scaleFactor
-                                scale = scale.coerceIn(1f, 5f)
-                                
-                                val surface = videoSurfaceView as? View
-                                if (surface != null) {
-                                    val maxTransX = (surface.width * (scale - 1)) / 2f
-                                    val maxTransY = (surface.height * (scale - 1)) / 2f
-                                    transX = transX.coerceIn(-maxTransX, maxTransX)
-                                    transY = transY.coerceIn(-maxTransY, maxTransY)
-                                    
-                                    surface.scaleX = scale
-                                    surface.scaleY = scale
-                                    surface.translationX = transX
-                                    surface.translationY = transY
-                                }
-                                
-                                zoomPercent = (scale * 100).toInt()
-                                zoomTrigger++
-                                return true
-                            }
-                        })
-                    } else null
-                    
-                    val gestureDetector = android.view.GestureDetector(ctx, object : android.view.GestureDetector.SimpleOnGestureListener() {
-                        override fun onLongPress(e: android.view.MotionEvent) {
-                            if (isLocked) return
-                            exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(2.0f)
-                            seekMessage = "2x Speed"
-                            isForwardSeek = true
-                            seekTrigger++
-                        }
-
-                        override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
-                            if (isLocked) return false
-                            if (!gestureDoubleTapEnabled) return false
-                            val surface = videoSurfaceView as? View ?: return false
-                            
-                            if (e.x > surface.width / 2f) {
-                                exoPlayer.seekTo(exoPlayer.currentPosition + 10000)
-                                seekMessage = "+10s"
-                                isForwardSeek = true
-                                seekTrigger++
-                            } else {
-                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
-                                seekMessage = "-10s"
-                                isForwardSeek = false
-                                seekTrigger++
-                            }
-                            return true
-                        }
-
-                        override fun onDown(e: android.view.MotionEvent): Boolean {
-                            if (isLocked) return false
-                            isBrightnessScroll = false
-                            isVolumeScroll = false
-                            // Always get current system volume at start of gesture
-                            accumulatedVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
-                            return false
-                        }
-
-                        override fun onScroll(e1: android.view.MotionEvent?, e2: android.view.MotionEvent, distanceX: Float, distanceY: Float): Boolean {
-                            if (isLocked) return false
-                            
-                            val surface = videoSurfaceView as? View ?: return false
-                            
-                            val pointerCount = e2.pointerCount
-                            
-                            if (gesturePanEnabled && scale > 1f && pointerCount >= 2) {
-                                transX -= distanceX
-                                transY -= distanceY
-                                
-                                val maxTransX = (surface.width * (scale - 1)) / 2f
-                                val maxTransY = (surface.height * (scale - 1)) / 2f
-                                transX = transX.coerceIn(-maxTransX, maxTransX)
-                                transY = transY.coerceIn(-maxTransY, maxTransY)
-                                
-                                surface.translationX = transX
-                                surface.translationY = transY
-                                return true
-                            } else if (scale == 1f && pointerCount == 1) {
-                                if (e1 == null) return false
-                                
-                                if (!isBrightnessScroll && !isVolumeScroll) {
-                                    if (abs(distanceY) > abs(distanceX) + 10) {
-                                        if (e1.x < surface.width / 2f && gestureBrightnessEnabled) {
-                                            isBrightnessScroll = true
-                                        } else if (e1.x >= surface.width / 2f && gestureVolumeEnabled) {
-                                            isVolumeScroll = true
-                                        } else {
-                                            return false
-                                        }
-                                    } else if (abs(distanceX) > abs(distanceY) + 10 && gestureSeekEnabled) {
-                                        val seekAmount = (distanceX * 50 * gestureSeekSensitivity).toLong()
-                                        val newPos = (exoPlayer.currentPosition - seekAmount).coerceIn(0, exoPlayer.duration.coerceAtLeast(0))
-                                        exoPlayer.seekTo(newPos)
-                                        if (distanceX > 0) {
-                                            seekMessage = "+${(seekAmount / 1000).toInt()}s"
-                                            isForwardSeek = true
-                                        } else {
-                                            seekMessage = "-${(kotlin.math.abs(seekAmount) / 1000).toInt()}s"
-                                            isForwardSeek = false
-                                        }
-                                        seekTrigger++
-                                        return true
-                                    } else {
-                                        return false
-                                    }
-                                }
-
-                                if (isBrightnessScroll && gestureBrightnessEnabled) {
-                                    activity?.window?.let { window ->
-                                        val lp = window.attributes
-                                        // Use tracked brightness or get from window
-                                        var currentBrightness = if (trackedBrightness >= 0f) {
-                                            trackedBrightness
-                                        } else {
-                                            lp.screenBrightness
-                                        }
-                                        if (currentBrightness < 0f) currentBrightness = 0.5f
-                                        
-                                        // Swipe UP = INCREASE brightness, Swipe DOWN = DECREASE brightness
-                                        // distanceY: positive = finger UP, negative = finger DOWN
-                                        val sensMultiplier = gestureBrightnessSensitivity * 2f
-                                        val newBrightness = (currentBrightness + distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
-                                        
-                                        // Track the brightness for continuous gestures
-                                        trackedBrightness = newBrightness
-                                        
-                                        lp.screenBrightness = newBrightness
-                                        window.attributes = lp
-                                        
-                                        brightnessPercent = (newBrightness * 100).toInt()
-                                        brightnessTrigger++
-                                    }
-                                    return true
-                                }
-                                
-                                if (isVolumeScroll && gestureVolumeEnabled) {
-                                    // Swipe UP = INCREASE volume, Swipe DOWN = DECREASE volume
-                                    // distanceY: positive = finger moved DOWN, negative = finger moved UP
-                                    val sensMultiplier = gestureVolumeSensitivity * 2f
-                                    
-                                    // Invert so swipe UP increases, swipe DOWN decreases
-                                    accumulatedVolume += (distanceY / surface.height) * maxVolume * sensMultiplier
-                                    
-                                    if (volumeBoostEnabled) {
-                                        // Volume boost mode: 0-200%
-                                        val maxBoostVolume = maxVolume * 2f
-                                        val boostedVolume = accumulatedVolume.coerceIn(0f, maxBoostVolume)
-                                        val systemVolume = boostedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
-                                        val boostMultiplier = if (boostedVolume > maxVolume) {
-                                            1f + (boostedVolume - maxVolume) / maxVolume
-                                        } else {
-                                            1f
-                                        }
-                                        
-                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
-                                        exoPlayer.volume = boostMultiplier.coerceIn(1f, 2f)
-                                        
-                                        volumePercent = ((boostedVolume / maxVolume) * 100).toInt().coerceAtMost(200)
-                                    } else {
-                                        // Normal mode: 0-100%
-                                        val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
-                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                                        exoPlayer.volume = 1f
-                                        
-                                        volumePercent = ((newVol.toFloat() / maxVolume) * 100).toInt()
-                                    }
-                                    volumeTrigger++
-                                    return true
-                                }
-                            }
-                            return false
-                        }
-                    })
+                    // Gesture handling - Using a wrapper class to properly handle lock state
+                    val gestureHandler = PlayerGestureHandler(
+                        activity = activity,
+                        playerView = this,
+                        exoPlayer = exoPlayer,
+                        audioManager = audioManager,
+                        maxVolume = maxVolume,
+                        gestureSeekEnabled = gestureSeekEnabled,
+                        gestureSeekSensitivity = gestureSeekSensitivity,
+                        gestureBrightnessEnabled = gestureBrightnessEnabled,
+                        gestureBrightnessSensitivity = gestureBrightnessSensitivity,
+                        gestureVolumeEnabled = gestureVolumeEnabled,
+                        gestureVolumeSensitivity = gestureVolumeSensitivity,
+                        gestureZoomEnabled = gestureZoomEnabled,
+                        gesturePanEnabled = gesturePanEnabled,
+                        gestureDoubleTapEnabled = gestureDoubleTapEnabled,
+                        onZoomChanged = { percent, trigger ->
+                            zoomPercent = percent
+                            zoomTrigger = trigger
+                        },
+                        onVolumeChanged = { percent, trigger ->
+                            volumePercent = percent
+                            volumeTrigger = trigger
+                        },
+                        onBrightnessChanged = { percent, trigger ->
+                            brightnessPercent = percent
+                            brightnessTrigger = trigger
+                        },
+                        onSeekChanged = { message, forward, trigger ->
+                            seekMessage = message
+                            isForwardSeek = forward
+                            seekTrigger = trigger
+                        },
+                        isLockedProvider = { isLocked },
+                        onShowUnlock = { showUnlockButton = true }
+                    )
                     
                     setOnTouchListener { _, event ->
-                        if (isLocked) {
-                            if (event.action == android.view.MotionEvent.ACTION_UP) {
-                                showUnlockButton = true
-                            }
-                            return@setOnTouchListener true
-                        }
-                        
-                        if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
-                            if (exoPlayer.playbackParameters.speed == 2.0f) {
-                                exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(1.0f)
-                            }
-                        }
-                        
-                        scaleDetector?.onTouchEvent(event)
-                        gestureDetector.onTouchEvent(event)
-                        false
+                        gestureHandler.handleTouchEvent(event)
                     }
                 }
             },
@@ -894,12 +739,7 @@ fun PlayerScreen(url: String) {
         // Overlay UI
         if (!isLocked) {
             IndicatorOverlay(Icons.Default.ZoomIn, "$zoomPercent%", showZoom)
-            IndicatorOverlay(
-                icon = Icons.Default.VolumeUp, 
-                text = "$volumePercent%", 
-                isVisible = showVolume,
-                textColor = if (volumePercent >= 100) Color(0xFFFF4444) else Color.White
-            )
+            IndicatorOverlay(Icons.Default.VolumeUp, "$volumePercent%", showVolume)
             IndicatorOverlay(Icons.Default.BrightnessMedium, "$brightnessPercent%", showBrightness)
         }
         
@@ -958,6 +798,7 @@ fun PlayerScreen(url: String) {
         )
     }
     
+    
     // Subtitle Dialog
     if (showSubtitleDialog) {
         TrackSelectionDialog(
@@ -968,25 +809,196 @@ fun PlayerScreen(url: String) {
             dialogColors = dialogColors
         )
     }
+}
+
+// Separate class to handle gestures - this ensures lock state is properly checked
+@UnstableApi
+class PlayerGestureHandler(
+    private val activity: Activity?,
+    private val playerView: PlayerView,
+    private val exoPlayer: ExoPlayer,
+    private val audioManager: AudioManager,
+    private val maxVolume: Int,
+    private val gestureSeekEnabled: Boolean,
+    private val gestureSeekSensitivity: Float,
+    private val gestureBrightnessEnabled: Boolean,
+    private val gestureBrightnessSensitivity: Float,
+    private val gestureVolumeEnabled: Boolean,
+    private val gestureVolumeSensitivity: Float,
+    private val gestureZoomEnabled: Boolean,
+    private val gesturePanEnabled: Boolean,
+    private val gestureDoubleTapEnabled: Boolean,
+    private val onZoomChanged: (Int, Int) -> Unit,
+    private val onVolumeChanged: (Int, Int) -> Unit,
+    private val onBrightnessChanged: (Int, Int) -> Unit,
+    private val onSeekChanged: (String, Boolean, Int) -> Unit,
+    private val isLockedProvider: () -> Boolean,
+    private val onShowUnlock: () -> Unit
+) {
+    private var scale = 1f
+    private var transX = 0f
+    private var transY = 0f
+    private var isBrightnessScroll = false
+    private var isVolumeScroll = false
+    private var accumulatedVolume = 0f
+    private var zoomTriggerCount = 0
+    private var volumeTriggerCount = 0
+    private var brightnessTriggerCount = 0
+    private var seekTriggerCount = 0
     
-    // Aspect Ratio Dialog
-    if (showAspectRatioDialog) {
-        AspectRatioDialog(
-            onDismiss = { showAspectRatioDialog = false },
-            onAspectRatioSelected = { resizeMode, customRatio ->
-                playerViewRef?.let { playerView ->
-                    if (customRatio != null) {
-                        playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        playerView.setAspectRatioListener { _, _, _ -> customRatio }
-                    } else {
-                        playerView.setAspectRatioListener(null)
-                        playerView.resizeMode = resizeMode
+    private val scaleDetector: android.view.ScaleGestureDetector?
+    private val gestureDetector: android.view.GestureDetector
+    
+    init {
+        val ctx = playerView.context
+        
+        scaleDetector = if (gestureZoomEnabled) {
+            android.view.ScaleGestureDetector(ctx, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+                    if (isLockedProvider()) return false
+                    
+                    scale *= detector.scaleFactor
+                    scale = scale.coerceIn(1f, 5f)
+                    
+                    val surface = playerView.videoSurfaceView as? View
+                    if (surface != null) {
+                        val maxTransX = (surface.width * (scale - 1)) / 2f
+                        val maxTransY = (surface.height * (scale - 1)) / 2f
+                        transX = transX.coerceIn(-maxTransX, maxTransX)
+                        transY = transY.coerceIn(-maxTransY, maxTransY)
+                        
+                        surface.scaleX = scale
+                        surface.scaleY = scale
+                        surface.translationX = transX
+                        surface.translationY = transY
+                    }
+                    
+                    onZoomChanged((scale * 100).toInt(), ++zoomTriggerCount)
+                    return true
+                }
+            })
+        } else null
+        
+        gestureDetector = android.view.GestureDetector(ctx, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onLongPress(e: android.view.MotionEvent) {
+                if (isLockedProvider()) return
+                exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(2.0f)
+                onSeekChanged("2x Speed", true, ++seekTriggerCount)
+            }
+
+            override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                if (isLockedProvider()) return false
+                if (!gestureDoubleTapEnabled) return false
+                val surface = playerView.videoSurfaceView as? View ?: return false
+                
+                if (e.x > surface.width / 2f) {
+                    exoPlayer.seekTo(exoPlayer.currentPosition + 10000)
+                    onSeekChanged("+10s", true, ++seekTriggerCount)
+                } else {
+                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
+                    onSeekChanged("-10s", false, ++seekTriggerCount)
+                }
+                return true
+            }
+
+            override fun onDown(e: android.view.MotionEvent): Boolean {
+                if (isLockedProvider()) return false
+                isBrightnessScroll = false
+                isVolumeScroll = false
+                accumulatedVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                return false
+            }
+
+            override fun onScroll(e1: android.view.MotionEvent?, e2: android.view.MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+                if (isLockedProvider()) return false
+                
+                val surface = playerView.videoSurfaceView as? View ?: return false
+                val pointerCount = e2.pointerCount
+                
+                if (gesturePanEnabled && scale > 1f && pointerCount >= 2) {
+                    transX -= distanceX
+                    transY -= distanceY
+                    
+                    val maxTransX = (surface.width * (scale - 1)) / 2f
+                    val maxTransY = (surface.height * (scale - 1)) / 2f
+                    transX = transX.coerceIn(-maxTransX, maxTransX)
+                    transY = transY.coerceIn(-maxTransY, maxTransY)
+                    
+                    surface.translationX = transX
+                    surface.translationY = transY
+                    return true
+                } else if (scale == 1f && pointerCount == 1) {
+                    if (e1 == null) return false
+                    
+                    if (!isBrightnessScroll && !isVolumeScroll) {
+                        if (abs(distanceY) > abs(distanceX) + 10) {
+                            if (e1.x < surface.width / 2f && gestureBrightnessEnabled) {
+                                isBrightnessScroll = true
+                            } else if (e1.x >= surface.width / 2f && gestureVolumeEnabled) {
+                                isVolumeScroll = true
+                            } else {
+                                return false
+                            }
+                        } else if (abs(distanceX) > abs(distanceY) + 10 && gestureSeekEnabled) {
+                            val seekAmount = (distanceX * 50 * gestureSeekSensitivity).toLong()
+                            val newPos = (exoPlayer.currentPosition - seekAmount).coerceIn(0, exoPlayer.duration.coerceAtLeast(0))
+                            exoPlayer.seekTo(newPos)
+                            val msg = if (distanceX > 0) "+${(seekAmount / 1000).toInt()}s" else "-${(kotlin.math.abs(seekAmount) / 1000).toInt()}s"
+                            onSeekChanged(msg, distanceX > 0, ++seekTriggerCount)
+                            return true
+                        } else {
+                            return false
+                        }
+                    }
+
+                    if (isBrightnessScroll && gestureBrightnessEnabled) {
+                        activity?.window?.let { window ->
+                            val lp = window.attributes
+                            var currentBrightness = lp.screenBrightness
+                            if (currentBrightness < 0f) currentBrightness = 0.5f
+                            
+                            val sensMultiplier = gestureBrightnessSensitivity * 1.5f
+                            val newBrightness = (currentBrightness + distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
+                            lp.screenBrightness = newBrightness
+                            window.attributes = lp
+                            
+                            onBrightnessChanged((newBrightness * 100).toInt(), ++brightnessTriggerCount)
+                        }
+                        return true
+                    }
+                    
+                    if (isVolumeScroll && gestureVolumeEnabled) {
+                        val sensMultiplier = gestureVolumeSensitivity * 1.5f
+                        accumulatedVolume += (distanceY / surface.height) * maxVolume * sensMultiplier
+                        val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                        
+                        onVolumeChanged(((newVol.toFloat() / maxVolume) * 100).toInt(), ++volumeTriggerCount)
+                        return true
                     }
                 }
-                showAspectRatioDialog = false
-            },
-            dialogColors = dialogColors
-        )
+                return false
+            }
+        })
+    }
+    
+    fun handleTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (isLockedProvider()) {
+            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                onShowUnlock()
+            }
+            return true
+        }
+        
+        if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
+            if (exoPlayer.playbackParameters.speed == 2.0f) {
+                exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(1.0f)
+            }
+        }
+        
+        scaleDetector?.onTouchEvent(event)
+        gestureDetector.onTouchEvent(event)
+        return false
     }
 }
 
@@ -1058,7 +1070,6 @@ fun TrackSelectionDialog(
     dialogColors: DialogColors
 ) {
     val tracks = exoPlayer.currentTracks
-    var selectedOverride by remember { mutableStateOf<TrackSelectionOverride?>(null) }
     
     // Find the track group for this type
     val trackGroups = remember(tracks) {
@@ -1073,7 +1084,15 @@ fun TrackSelectionDialog(
         groups
     }
     
-    // FIXED SIZE - same regardless of track count (2 tracks or 15 tracks = same size)
+    // Calculate item count for consistent height
+    val itemCount = trackGroups.size + if (trackType == C.TRACK_TYPE_TEXT) 1 else 0
+    val listHeight = when {
+        itemCount <= 2 -> 140.dp
+        itemCount <= 4 -> 220.dp
+        itemCount <= 6 -> 300.dp
+        else -> 380.dp
+    }
+    
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -1084,27 +1103,27 @@ fun TrackSelectionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .width(380.dp)
-                .height(420.dp)
+                .widthIn(min = 340.dp, max = 460.dp)
+                .fillMaxWidth(0.90f)
+                .heightIn(min = 220.dp)
                 .clip(RoundedCornerShape(20.dp)),
             color = dialogColors.backgroundColor,
             tonalElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
             ) {
-                // Title
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleLarge,
                         color = dialogColors.textColor,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 
@@ -1116,10 +1135,9 @@ fun TrackSelectionDialog(
                 
                 LazyColumn(
                     modifier = Modifier
-                        .weight(1f)
+                        .height(listHeight)
                         .padding(vertical = 8.dp)
                 ) {
-                    // Add "None" option for subtitles
                     if (trackType == C.TRACK_TYPE_TEXT) {
                         item {
                             val isSelected = trackGroups.isEmpty() || !tracks.groups.any { 
@@ -1188,7 +1206,7 @@ fun TrackSelectionDialog(
                                     append(lang)
                                     if (labelStr.isNotEmpty()) append(" • $labelStr")
                                 }
-                                val subtitle = buildList {
+                                val subInfo = buildList {
                                     if (channels.isNotEmpty()) add(channels)
                                     if (bitrate.isNotEmpty()) add(bitrate)
                                     if (sampleRate.isNotEmpty()) add(sampleRate)
@@ -1197,7 +1215,7 @@ fun TrackSelectionDialog(
                                 
                                 TrackOption(
                                     label = mainLabel,
-                                    subtitle = subtitle.ifEmpty { null },
+                                    subtitle = subInfo.ifEmpty { null },
                                     isSelected = isSelected,
                                     dialogColors = dialogColors,
                                     onClick = {
@@ -1227,14 +1245,14 @@ fun TrackSelectionDialog(
                                     append(lang)
                                     if (labelStr.isNotEmpty() && labelStr != lang) append(" • $labelStr")
                                 }
-                                val subtitle = buildList {
+                                val subInfo = buildList {
                                     addAll(flags)
                                     if (mimeType.isNotEmpty()) add(mimeType)
                                 }.joinToString(" • ")
                                 
                                 TrackOption(
                                     label = mainLabel,
-                                    subtitle = subtitle.ifEmpty { null },
+                                    subtitle = subInfo.ifEmpty { null },
                                     isSelected = isSelected,
                                     dialogColors = dialogColors,
                                     onClick = {
@@ -1286,20 +1304,11 @@ fun TrackOption(
     dialogColors: DialogColors,
     onClick: () -> Unit
 ) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.1f) else Color.Transparent,
-        animationSpec = tween(200),
-        label = "bgColor"
-    )
-    
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(backgroundColor)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = if (subtitle != null) 10.dp else 12.dp),
+            .padding(horizontal = 20.dp, vertical = if (subtitle != null) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
@@ -1307,7 +1316,7 @@ fun TrackOption(
             onClick = onClick,
             colors = RadioButtonDefaults.colors(
                 selectedColor = dialogColors.selectedColor,
-                unselectedColor = dialogColors.textColor.copy(alpha = 0.5f)
+                unselectedColor = dialogColors.textColor.copy(alpha = 0.6f)
             )
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -1317,16 +1326,15 @@ fun TrackOption(
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (isSelected) dialogColors.selectedColor else dialogColors.textColor,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                overflow = TextOverflow.Ellipsis
             )
             if (subtitle != null) {
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.8f) else dialogColors.textColor.copy(alpha = 0.55f),
-                    maxLines = 2,
+                    color = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.7f) else dialogColors.textColor.copy(alpha = 0.6f),
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -1335,12 +1343,7 @@ fun TrackOption(
 }
 
 @Composable
-fun IndicatorOverlay(
-    icon: ImageVector, 
-    text: String, 
-    isVisible: Boolean,
-    textColor: Color = Color.White
-) {
+fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
@@ -1359,126 +1362,12 @@ fun IndicatorOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(32.dp))
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
                 Text(
                     text = text,
-                    color = textColor,
+                    color = Color.White,
                     style = MaterialTheme.typography.titleLarge
                 )
-            }
-        }
-    }
-}
-
-data class AspectRatioOption(
-    val label: String,
-    val description: String,
-    val resizeMode: Int,
-    val customRatio: Float? = null
-)
-
-@Composable
-fun AspectRatioDialog(
-    onDismiss: () -> Unit,
-    onAspectRatioSelected: (Int, Float?) -> Unit,
-    dialogColors: DialogColors
-) {
-    val options = listOf(
-        AspectRatioOption("Original (Fit)", "Keep original aspect ratio, fit within screen", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-        AspectRatioOption("Stretch (Fill)", "Stretch to fill entire screen", AspectRatioFrameLayout.RESIZE_MODE_FILL),
-        AspectRatioOption("Crop (Zoom)", "Zoom to fill screen, may crop edges", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-        AspectRatioOption("16:9", "Standard widescreen ratio", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, 16f / 9f),
-        AspectRatioOption("18:9", "Modern smartphone ratio", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, 18f / 9f),
-        AspectRatioOption("19:9", "Tall smartphone ratio", AspectRatioFrameLayout.RESIZE_MODE_FILL, 19f / 9f),
-        AspectRatioOption("20:9", "Extra tall ratio", AspectRatioFrameLayout.RESIZE_MODE_FILL, 20f / 9f),
-        AspectRatioOption("21:9", "Ultrawide cinema ratio", AspectRatioFrameLayout.RESIZE_MODE_FILL, 21f / 9f)
-    )
-    
-    var selectedOption by remember { mutableStateOf(0) }
-    
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
-        )
-    ) {
-        Surface(
-            modifier = Modifier
-                .widthIn(min = 340.dp, max = 420.dp)
-                .fillMaxWidth(0.88f)
-                .clip(RoundedCornerShape(20.dp)),
-            color = dialogColors.backgroundColor,
-            tonalElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Aspect Ratio",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = dialogColors.textColor,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                
-                HorizontalDivider(
-                    color = dialogColors.textColor.copy(alpha = 0.12f),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-                
-                LazyColumn(
-                    modifier = Modifier.padding(vertical = 8.dp)
-                ) {
-                    items(options.size) { index ->
-                        val option = options[index]
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedOption = index
-                                    onAspectRatioSelected(option.resizeMode, option.customRatio)
-                                }
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedOption == index,
-                                onClick = {
-                                    selectedOption = index
-                                    onAspectRatioSelected(option.resizeMode, option.customRatio)
-                                },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = dialogColors.selectedColor,
-                                    unselectedColor = dialogColors.textColor.copy(alpha = 0.6f)
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = option.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = if (selectedOption == index) dialogColors.selectedColor else dialogColors.textColor,
-                                    fontWeight = if (selectedOption == index) FontWeight.Medium else FontWeight.Normal
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = option.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = dialogColors.textColor.copy(alpha = 0.55f)
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
     }
