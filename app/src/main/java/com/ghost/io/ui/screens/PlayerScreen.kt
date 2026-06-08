@@ -105,6 +105,10 @@ fun PlayerScreen(url: String) {
     var showQualityDialog by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
+    var showAspectRatioDialog by remember { mutableStateOf(false) }
+    
+    // Aspect ratio state
+    var currentAspectRatio by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     
     // Collect settings
     val decoderPriority by settingsRepository.decoderPriority.collectAsState(initial = DecoderPriority.PREFER_DEVICE)
@@ -544,45 +548,7 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback {
-                            val wrapper = ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault)
-                            val popup = PopupMenu(wrapper, this@apply)
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIT, 0, "Original (Fit)")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FILL, 1, "Stretch (Fill)")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_ZOOM, 2, "Crop (Zoom)")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, 3, "16:9")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, 4, "18:9")
-                            popup.menu.add(0, 5, 5, "19:9")
-                            popup.menu.add(0, 6, 6, "20:9")
-                            popup.menu.add(0, 7, 7, "21:9")
-                            
-                            popup.setOnMenuItemClickListener { item ->
-                                when (item.itemId) {
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIT,
-                                    AspectRatioFrameLayout.RESIZE_MODE_FILL,
-                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> {
-                                        setAspectRatioListener(null)
-                                        resizeMode = item.itemId
-                                    }
-                                    5 -> {
-                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                        setAspectRatioListener { _, _, _ -> 19f / 9f }
-                                    }
-                                    6 -> {
-                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                        setAspectRatioListener { _, _, _ -> 20f / 9f }
-                                    }
-                                    7 -> {
-                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                        setAspectRatioListener { _, _, _ -> 21f / 9f }
-                                    }
-                                }
-                                true
-                            }
-                            popup.show()
-                        }
+                        setClickFeedback { showAspectRatioDialog = true }
                     }
                     
                     // PiP Button
@@ -806,6 +772,43 @@ fun PlayerScreen(url: String) {
             exoPlayer = exoPlayer,
             trackType = C.TRACK_TYPE_TEXT,
             onDismiss = { showSubtitleDialog = false },
+            dialogColors = dialogColors
+        )
+    }
+    
+    // Aspect Ratio Dialog
+    if (showAspectRatioDialog) {
+        AspectRatioDialog(
+            currentAspectRatio = currentAspectRatio,
+            onAspectRatioSelected = { ratio ->
+                currentAspectRatio = ratio
+                playerViewRef?.let { pv ->
+                    when (ratio) {
+                        AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                        AspectRatioFrameLayout.RESIZE_MODE_FILL,
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
+                        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
+                        AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> {
+                            pv.setAspectRatioListener(null)
+                            pv.resizeMode = ratio
+                        }
+                        5 -> { // 19:9
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            pv.setAspectRatioListener { _, _, _ -> 19f / 9f }
+                        }
+                        6 -> { // 20:9
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            pv.setAspectRatioListener { _, _, _ -> 20f / 9f }
+                        }
+                        7 -> { // 21:9
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            pv.setAspectRatioListener { _, _, _ -> 21f / 9f }
+                        }
+                    }
+                }
+                showAspectRatioDialog = false
+            },
+            onDismiss = { showAspectRatioDialog = false },
             dialogColors = dialogColors
         )
     }
@@ -1088,14 +1091,9 @@ fun TrackSelectionDialog(
         groups
     }
     
-    // Calculate item count for consistent height
-    val itemCount = trackGroups.size + if (trackType == C.TRACK_TYPE_TEXT) 1 else 0
-    val listHeight = when {
-        itemCount <= 2 -> 140.dp
-        itemCount <= 4 -> 220.dp
-        itemCount <= 6 -> 300.dp
-        else -> 380.dp
-    }
+    // FIXED size for ALL dialogs - same width and height regardless of track count
+    val dialogWidth = 400.dp
+    val dialogHeight = 400.dp
     
     Dialog(
         onDismissRequest = onDismiss,
@@ -1107,20 +1105,20 @@ fun TrackSelectionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 340.dp, max = 460.dp)
-                .fillMaxWidth(0.90f)
-                .heightIn(min = 220.dp)
+                .width(dialogWidth)
+                .height(dialogHeight)
                 .clip(RoundedCornerShape(20.dp)),
             color = dialogColors.backgroundColor,
             tonalElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
+                // Title
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -1137,9 +1135,10 @@ fun TrackSelectionDialog(
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
                 
+                // Scrollable list - fills remaining space
                 LazyColumn(
                     modifier = Modifier
-                        .height(listHeight)
+                        .weight(1f)
                         .padding(vertical = 8.dp)
                 ) {
                     if (trackType == C.TRACK_TYPE_TEXT) {
@@ -1376,3 +1375,91 @@ fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
         }
     }
 }
+
+@Composable
+fun AspectRatioDialog(
+    currentAspectRatio: Int,
+    onAspectRatioSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    dialogColors: DialogColors
+) {
+    val aspectOptions = listOf(
+        AspectRatioOption("Original (Fit)", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+        AspectRatioOption("Stretch (Fill)", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+        AspectRatioOption("Crop (Zoom)", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+        AspectRatioOption("16:9", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),
+        AspectRatioOption("18:9", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT),
+        AspectRatioOption("19:9", 5),
+        AspectRatioOption("20:9", 6),
+        AspectRatioOption("21:9", 7)
+    )
+    
+    // FIXED size - same as other dialogs
+    val dialogWidth = 400.dp
+    val dialogHeight = 400.dp
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .width(dialogWidth)
+                .height(dialogHeight)
+                .clip(RoundedCornerShape(20.dp)),
+            color = dialogColors.backgroundColor,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Title
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Aspect Ratio",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = dialogColors.textColor,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                
+                HorizontalDivider(
+                    color = dialogColors.textColor.copy(alpha = 0.12f),
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                
+                // Options list
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 8.dp)
+                ) {
+                    items(aspectOptions) { option ->
+                        TrackOption(
+                            label = option.label,
+                            subtitle = null,
+                            isSelected = currentAspectRatio == option.value,
+                            dialogColors = dialogColors,
+                            onClick = { onAspectRatioSelected(option.value) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class AspectRatioOption(
+    val label: String,
+    val value: Int
+)
