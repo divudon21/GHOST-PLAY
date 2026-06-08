@@ -1,0 +1,28 @@
+# Build artifacts
+/build/
+/app/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle
+.gradle/
+/local.properties
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keystore (keep debug.keystore for CI)
+# debug.keystore
+
+# Temp files
+*.tar.gz
+*.tmp
