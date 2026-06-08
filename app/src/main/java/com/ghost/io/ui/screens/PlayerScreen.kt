@@ -915,6 +915,7 @@ class PlayerGestureHandler(
                 val surface = playerView.videoSurfaceView as? View ?: return false
                 val pointerCount = e2.pointerCount
                 
+                // Pan gesture: 2 fingers when zoomed in
                 if (gesturePanEnabled && scale > 1f && pointerCount >= 2) {
                     transX -= distanceX
                     transY -= distanceY
@@ -927,7 +928,10 @@ class PlayerGestureHandler(
                     surface.translationX = transX
                     surface.translationY = transY
                     return true
-                } else if (scale == 1f && pointerCount == 1) {
+                }
+                
+                // Brightness/Volume/Seek gestures: 1 finger (works regardless of zoom)
+                if (pointerCount == 1) {
                     if (e1 == null) return false
                     
                     if (!isBrightnessScroll && !isVolumeScroll) {
