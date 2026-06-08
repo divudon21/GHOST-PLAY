@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.io"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0-Optimized"
     }
 
     signingConfigs {
@@ -83,7 +83,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-rtsp:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media:media:1.7.0")
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
+    // implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1") // Removed for better Android 11 compatibility
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
