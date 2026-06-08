@@ -16,7 +16,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -26,14 +26,27 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            storeFile = file("${rootProject.projectDir}/release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "release"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+        }
     }
 
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("debug")
+            debuggable = true
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
