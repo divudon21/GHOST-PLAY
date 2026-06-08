@@ -765,8 +765,10 @@ fun PlayerScreen(url: String) {
                                         var currentBrightness = lp.screenBrightness
                                         if (currentBrightness < 0f) currentBrightness = 0.5f
                                         
+                                        // Swipe UP (distanceY negative) should INCREASE brightness
+                                        // Swipe DOWN (distanceY positive) should DECREASE brightness
                                         val sensMultiplier = gestureBrightnessSensitivity * 1.5f
-                                        val newBrightness = (currentBrightness + distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
+                                        val newBrightness = (currentBrightness - distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
                                         lp.screenBrightness = newBrightness
                                         window.attributes = lp
                                         
@@ -777,8 +779,10 @@ fun PlayerScreen(url: String) {
                                 }
                                 
                                 if (isVolumeScroll && gestureVolumeEnabled) {
+                                    // Swipe UP (distanceY negative) should INCREASE volume
+                                    // Swipe DOWN (distanceY positive) should DECREASE volume
                                     val sensMultiplier = gestureVolumeSensitivity * 1.5f
-                                    accumulatedVolume += (distanceY / surface.height) * maxVolume * sensMultiplier
+                                    accumulatedVolume -= (distanceY / surface.height) * maxVolume * sensMultiplier
                                     
                                     if (volumeBoostEnabled) {
                                         // Volume boost mode: 0-200%
