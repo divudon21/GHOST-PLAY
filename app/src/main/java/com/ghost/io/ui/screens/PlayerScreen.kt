@@ -790,26 +790,28 @@ fun PlayerScreen(url: String) {
                                 }
                                 
                                 if (isVolumeScroll && gestureVolumeEnabled) {
-                                    // Swipe UP (distanceY negative) should INCREASE volume
-                                    // Swipe DOWN (distanceY positive) should DECREASE volume
-                                    val sensMultiplier = gestureVolumeSensitivity * 1.5f
-                                    accumulatedVolume -= (distanceY / surface.height) * maxVolume * sensMultiplier
+                                    // Swipe UP = INCREASE volume, Swipe DOWN = DECREASE volume
+                                    // distanceY: positive = finger moved DOWN, negative = finger moved UP
+                                    val sensMultiplier = gestureVolumeSensitivity * 2f
+                                    
+                                    // Invert so swipe UP increases, swipe DOWN decreases
+                                    accumulatedVolume += (distanceY / surface.height) * maxVolume * sensMultiplier
                                     
                                     if (volumeBoostEnabled) {
-                                        // Volume boost mode: 0-130%
-                                        val maxBoostVolume = maxVolume * 1.3f
+                                        // Volume boost mode: 0-200%
+                                        val maxBoostVolume = maxVolume * 2f
                                         val boostedVolume = accumulatedVolume.coerceIn(0f, maxBoostVolume)
                                         val systemVolume = boostedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
                                         val boostMultiplier = if (boostedVolume > maxVolume) {
-                                            boostedVolume / maxVolume
+                                            1f + (boostedVolume - maxVolume) / maxVolume
                                         } else {
                                             1f
                                         }
                                         
                                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
-                                        exoPlayer.volume = boostMultiplier.coerceIn(1f, 1.3f)
+                                        exoPlayer.volume = boostMultiplier.coerceIn(1f, 2f)
                                         
-                                        volumePercent = ((boostedVolume / maxVolume) * 100).toInt().coerceAtMost(130)
+                                        volumePercent = ((boostedVolume / maxVolume) * 100).toInt().coerceAtMost(200)
                                     } else {
                                         // Normal mode: 0-100%
                                         val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
@@ -1071,15 +1073,7 @@ fun TrackSelectionDialog(
         groups
     }
     
-    // Calculate item count for consistent height
-    val itemCount = trackGroups.size + if (trackType == C.TRACK_TYPE_TEXT) 1 else 0 // +1 for "None" option
-    val listHeight = when {
-        itemCount <= 2 -> 200.dp
-        itemCount <= 4 -> 280.dp
-        itemCount <= 6 -> 360.dp
-        else -> 420.dp
-    }
-    
+    // FIXED SIZE - same regardless of track count (2 tracks or 15 tracks = same size)
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -1090,21 +1084,20 @@ fun TrackSelectionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 340.dp, max = 460.dp)
-                .fillMaxWidth(0.90f)
-                .heightIn(min = 220.dp)
+                .width(380.dp)
+                .height(420.dp)
                 .clip(RoundedCornerShape(20.dp)),
             color = dialogColors.backgroundColor,
             tonalElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
-                // Title with icon
+                // Title
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -1123,7 +1116,7 @@ fun TrackSelectionDialog(
                 
                 LazyColumn(
                     modifier = Modifier
-                        .height(listHeight)
+                        .weight(1f)
                         .padding(vertical = 8.dp)
                 ) {
                     // Add "None" option for subtitles
