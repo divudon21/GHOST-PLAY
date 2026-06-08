@@ -1074,10 +1074,10 @@ fun TrackSelectionDialog(
     // Calculate item count for consistent height
     val itemCount = trackGroups.size + if (trackType == C.TRACK_TYPE_TEXT) 1 else 0 // +1 for "None" option
     val listHeight = when {
-        itemCount <= 2 -> 140.dp
-        itemCount <= 4 -> 220.dp
-        itemCount <= 6 -> 300.dp
-        else -> 380.dp
+        itemCount <= 2 -> 200.dp
+        itemCount <= 4 -> 280.dp
+        itemCount <= 6 -> 360.dp
+        else -> 420.dp
     }
     
     Dialog(
