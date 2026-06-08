@@ -16,6 +16,7 @@ import android.widget.TextView
 import com.ghost.io.R
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1048,36 +1050,59 @@ fun TrackSelectionDialog(
         groups
     }
     
+    // Calculate item count for consistent height
+    val itemCount = trackGroups.size + if (trackType == C.TRACK_TYPE_TEXT) 1 else 0 // +1 for "None" option
+    val listHeight = when {
+        itemCount <= 2 -> 140.dp
+        itemCount <= 4 -> 220.dp
+        itemCount <= 6 -> 300.dp
+        else -> 380.dp
+    }
+    
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 450.dp)
-                .fillMaxWidth(0.92f)
-                .wrapContentHeight()
-                .clip(RoundedCornerShape(16.dp)),
-            color = dialogColors.backgroundColor
+                .widthIn(min = 340.dp, max = 460.dp)
+                .fillMaxWidth(0.90f)
+                .heightIn(min = 220.dp)
+                .clip(RoundedCornerShape(20.dp)),
+            color = dialogColors.backgroundColor,
+            tonalElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier.padding(vertical = 16.dp)
+                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = dialogColors.textColor,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                )
+                // Title with icon
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = dialogColors.textColor,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                }
                 
                 HorizontalDivider(
-                    color = dialogColors.textColor.copy(alpha = 0.1f),
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    color = dialogColors.textColor.copy(alpha = 0.12f),
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(horizontal = 20.dp)
                 )
                 
                 LazyColumn(
                     modifier = Modifier
-                        .heightIn(max = 450.dp)
+                        .height(listHeight)
                         .padding(vertical = 8.dp)
                 ) {
                     // Add "None" option for subtitles
@@ -1247,11 +1272,20 @@ fun TrackOption(
     dialogColors: DialogColors,
     onClick: () -> Unit
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.1f) else Color.Transparent,
+        animationSpec = tween(200),
+        label = "bgColor"
+    )
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(backgroundColor)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = if (subtitle != null) 10.dp else 12.dp),
+            .padding(horizontal = 12.dp, vertical = if (subtitle != null) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
@@ -1259,7 +1293,7 @@ fun TrackOption(
             onClick = onClick,
             colors = RadioButtonDefaults.colors(
                 selectedColor = dialogColors.selectedColor,
-                unselectedColor = dialogColors.textColor.copy(alpha = 0.6f)
+                unselectedColor = dialogColors.textColor.copy(alpha = 0.5f)
             )
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -1269,15 +1303,16 @@ fun TrackOption(
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (isSelected) dialogColors.selectedColor else dialogColors.textColor,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
             )
             if (subtitle != null) {
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.7f) else dialogColors.textColor.copy(alpha = 0.6f),
-                    maxLines = 1,
+                    color = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.8f) else dialogColors.textColor.copy(alpha = 0.55f),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
