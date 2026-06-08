@@ -1,0 +1,66 @@
+[
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_aud.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_aud.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.ghost.io.app-main-6:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.ghost.io.app-main-6:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.ghost.io.app-main-6:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.ghost.io.app-main-6:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_lock.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_lock.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_unlock.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_unlock.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_hq.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_hq.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_cc.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_cc.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_url.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_url.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_fireplay.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_fireplay.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_pip.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_pip.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_home.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_home.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_aspect.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_aspect.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/drawable_ic_music.xml.flat",
+        "source": "com.ghost.io.app-main-6:/drawable/ic_music.xml"
+    },
+    {
+        "merged": "com.ghost.io.app-debug-4:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.ghost.io.app-main-6:/mipmap-xhdpi/ic_launcher.png"
+    }
+]

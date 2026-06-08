@@ -1,0 +1,15 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_aspect
+drawable ic_aud
+drawable ic_cc
+drawable ic_fireplay
+drawable ic_home
+drawable ic_hq
+drawable ic_lock
+drawable ic_music
+drawable ic_pip
+drawable ic_unlock
+drawable ic_url
+mipmap ic_launcher
+string app_name
