@@ -79,6 +79,7 @@ class SettingsRepository(private val context: Context) {
     private val PLAYER_ORIENTATION_KEY = intPreferencesKey("player_orientation")
     private val SYSTEM_CAPTION_STYLE_KEY = booleanPreferencesKey("system_caption_style")
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
+    private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
 
     val themePreference: Flow<ThemePreference> = context.dataStore.data
         .map { preferences ->
@@ -204,6 +205,9 @@ class SettingsRepository(private val context: Context) {
             val value = preferences[DIALOG_THEME_KEY] ?: DialogThemePreference.FOLLOW_SYSTEM.ordinal
             DialogThemePreference.values()[value]
         }
+
+    val volumeBoostEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[VOLUME_BOOST_KEY] ?: false }
 
     suspend fun setThemePreference(preference: ThemePreference) {
         context.dataStore.edit { preferences ->
@@ -343,6 +347,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDialogTheme(theme: DialogThemePreference) {
         context.dataStore.edit { it[DIALOG_THEME_KEY] = theme.ordinal }
+    }
+
+    suspend fun setVolumeBoostEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[VOLUME_BOOST_KEY] = enabled }
     }
 
     suspend fun resetAllSettings() {

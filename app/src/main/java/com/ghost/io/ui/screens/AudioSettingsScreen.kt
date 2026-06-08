@@ -9,12 +9,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.SurroundSound
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -30,6 +32,7 @@ fun AudioSettingsScreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
     var showLanguageDialog by remember { mutableStateOf(false) }
+    val volumeBoostEnabled by viewModel.volumeBoostEnabled.collectAsState()
 
     Scaffold(
         topBar = {
@@ -77,6 +80,26 @@ fun AudioSettingsScreen(
                     subtitle = "Auto select best audio track",
                     icon = Icons.Default.SurroundSound,
                     onClick = { }
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Volume",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            item {
+                AudioToggleCard(
+                    title = "Volume Boost 200%",
+                    subtitle = "Increase maximum volume up to 200%. Useful for low-volume videos.",
+                    icon = Icons.Default.VolumeUp,
+                    checked = volumeBoostEnabled,
+                    onCheckedChange = { viewModel.setVolumeBoostEnabled(it) }
                 )
             }
 
@@ -135,6 +158,55 @@ fun AudioSettingsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun AudioToggleCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        }
     }
 }
 

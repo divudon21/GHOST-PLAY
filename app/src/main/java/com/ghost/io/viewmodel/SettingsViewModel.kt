@@ -244,6 +244,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = DialogThemePreference.FOLLOW_SYSTEM
         )
 
+    val volumeBoostEnabled: StateFlow<Boolean> = repository.volumeBoostEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     fun setTheme(theme: ThemePreference) {
         viewModelScope.launch {
             repository.setThemePreference(theme)
@@ -382,6 +389,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setDialogTheme(theme: DialogThemePreference) {
         viewModelScope.launch { repository.setDialogTheme(theme) }
+    }
+
+    fun setVolumeBoostEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setVolumeBoostEnabled(enabled) }
     }
 
     fun resetAllSettings() {

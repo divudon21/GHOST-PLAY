@@ -114,6 +114,7 @@ fun PlayerScreen(url: String) {
     var showQualityDialog by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
+    var showAspectRatioDialog by remember { mutableStateOf(false) }
     
     // Collect settings
     val decoderPriority by settingsRepository.decoderPriority.collectAsState(initial = DecoderPriority.PREFER_DEVICE)
@@ -125,6 +126,7 @@ fun PlayerScreen(url: String) {
     val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
     val appColorPreference by settingsRepository.colorPreference.collectAsState(initial = AppColorPreference.PURPLE)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
+    val volumeBoostEnabled by settingsRepository.volumeBoostEnabled.collectAsState(initial = false)
 
     // Immersive Mode
     DisposableEffect(Unit) {
@@ -451,14 +453,12 @@ fun PlayerScreen(url: String) {
                         setApplyEmbeddedFontSizes(subtitleEmbeddedStyles)
                         setApplyEmbeddedStyles(subtitleEmbeddedStyles)
                         
-                        // Only set fixed text size if embedded styles are disabled
-                        if (!subtitleEmbeddedStyles) {
-                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
-                        }
+                        // Always set text size - user preference
+                        setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
 
-                        // Only apply custom style if embedded styles are disabled
-                        // This allows ASS/SSA/WebVTT styled subtitles to show their colors
+                        // Apply custom style
                         if (!subtitleEmbeddedStyles) {
+                            // Full custom style when embedded styles disabled
                             val typeface = when (subtitleFont) {
                                 SubtitleFont.DEFAULT -> Typeface.DEFAULT
                                 SubtitleFont.MONOSPACE -> Typeface.MONOSPACE
@@ -476,8 +476,7 @@ fun PlayerScreen(url: String) {
                             )
                             setStyle(style)
                         } else {
-                            // For styled subtitles (ASS/SSA/WebVTT), set a minimal default style
-                            // that doesn't override colors but provides fallback
+                            // For styled subtitles - minimal style that doesn't override colors
                             val fallbackStyle = CaptionStyleCompat(
                                 android.graphics.Color.WHITE,
                                 if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
@@ -571,45 +570,7 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback {
-                            val wrapper = ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault)
-                            val popup = PopupMenu(wrapper, this@apply)
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIT, 0, "Original (Fit)")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FILL, 1, "Stretch (Fill)")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_ZOOM, 2, "Crop (Zoom)")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, 3, "16:9")
-                            popup.menu.add(0, AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, 4, "18:9")
-                            popup.menu.add(0, 5, 5, "19:9")
-                            popup.menu.add(0, 6, 6, "20:9")
-                            popup.menu.add(0, 7, 7, "21:9")
-                            
-                            popup.setOnMenuItemClickListener { item ->
-                                when (item.itemId) {
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIT,
-                                    AspectRatioFrameLayout.RESIZE_MODE_FILL,
-                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> {
-                                        setAspectRatioListener(null)
-                                        resizeMode = item.itemId
-                                    }
-                                    5 -> {
-                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                        setAspectRatioListener { _, _, _ -> 19f / 9f }
-                                    }
-                                    6 -> {
-                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                        setAspectRatioListener { _, _, _ -> 20f / 9f }
-                                    }
-                                    7 -> {
-                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                        setAspectRatioListener { _, _, _ -> 21f / 9f }
-                                    }
-                                }
-                                true
-                            }
-                            popup.show()
-                        }
+                        setClickFeedback { showAspectRatioDialog = true }
                     }
                     
                     // PiP Button
@@ -818,10 +779,29 @@ fun PlayerScreen(url: String) {
                                 if (isVolumeScroll && gestureVolumeEnabled) {
                                     val sensMultiplier = gestureVolumeSensitivity * 1.5f
                                     accumulatedVolume += (distanceY / surface.height) * maxVolume * sensMultiplier
-                                    val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
-                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
                                     
-                                    volumePercent = ((newVol.toFloat() / maxVolume) * 100).toInt()
+                                    if (volumeBoostEnabled) {
+                                        // Volume boost mode: 0-200%
+                                        val boostedVolume = accumulatedVolume.coerceIn(0f, maxVolume.toFloat() * 2f)
+                                        val systemVolume = boostedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
+                                        val boostMultiplier = if (boostedVolume > maxVolume) {
+                                            boostedVolume / maxVolume
+                                        } else {
+                                            1f
+                                        }
+                                        
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
+                                        exoPlayer.volume = boostMultiplier.coerceIn(1f, 2f)
+                                        
+                                        volumePercent = ((boostedVolume / maxVolume) * 100).toInt().coerceAtMost(200)
+                                    } else {
+                                        // Normal mode: 0-100%
+                                        val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                        exoPlayer.volume = 1f
+                                        
+                                        volumePercent = ((newVol.toFloat() / maxVolume) * 100).toInt()
+                                    }
                                     volumeTrigger++
                                     return true
                                 }
@@ -962,6 +942,26 @@ fun PlayerScreen(url: String) {
             exoPlayer = exoPlayer,
             trackType = C.TRACK_TYPE_TEXT,
             onDismiss = { showSubtitleDialog = false },
+            dialogColors = dialogColors
+        )
+    }
+    
+    // Aspect Ratio Dialog
+    if (showAspectRatioDialog) {
+        AspectRatioDialog(
+            onDismiss = { showAspectRatioDialog = false },
+            onAspectRatioSelected = { resizeMode, customRatio ->
+                playerViewRef?.let { playerView ->
+                    if (customRatio != null) {
+                        playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        playerView.setAspectRatioListener { _, _, _ -> customRatio }
+                    } else {
+                        playerView.setAspectRatioListener(null)
+                        playerView.resizeMode = resizeMode
+                    }
+                }
+                showAspectRatioDialog = false
+            },
             dialogColors = dialogColors
         )
     }
@@ -1346,6 +1346,120 @@ fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
                     color = Color.White,
                     style = MaterialTheme.typography.titleLarge
                 )
+            }
+        }
+    }
+}
+
+data class AspectRatioOption(
+    val label: String,
+    val description: String,
+    val resizeMode: Int,
+    val customRatio: Float? = null
+)
+
+@Composable
+fun AspectRatioDialog(
+    onDismiss: () -> Unit,
+    onAspectRatioSelected: (Int, Float?) -> Unit,
+    dialogColors: DialogColors
+) {
+    val options = listOf(
+        AspectRatioOption("Original (Fit)", "Keep original aspect ratio, fit within screen", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+        AspectRatioOption("Stretch (Fill)", "Stretch to fill entire screen", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+        AspectRatioOption("Crop (Zoom)", "Zoom to fill screen, may crop edges", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+        AspectRatioOption("16:9", "Standard widescreen ratio", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, 16f / 9f),
+        AspectRatioOption("18:9", "Modern smartphone ratio", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, 18f / 9f),
+        AspectRatioOption("19:9", "Tall smartphone ratio", AspectRatioFrameLayout.RESIZE_MODE_FILL, 19f / 9f),
+        AspectRatioOption("20:9", "Extra tall ratio", AspectRatioFrameLayout.RESIZE_MODE_FILL, 20f / 9f),
+        AspectRatioOption("21:9", "Ultrawide cinema ratio", AspectRatioFrameLayout.RESIZE_MODE_FILL, 21f / 9f)
+    )
+    
+    var selectedOption by remember { mutableStateOf(0) }
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(min = 340.dp, max = 420.dp)
+                .fillMaxWidth(0.88f)
+                .clip(RoundedCornerShape(20.dp)),
+            color = dialogColors.backgroundColor,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Aspect Ratio",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = dialogColors.textColor,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                
+                HorizontalDivider(
+                    color = dialogColors.textColor.copy(alpha = 0.12f),
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                
+                LazyColumn(
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    items(options.size) { index ->
+                        val option = options[index]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedOption = index
+                                    onAspectRatioSelected(option.resizeMode, option.customRatio)
+                                }
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedOption == index,
+                                onClick = {
+                                    selectedOption = index
+                                    onAspectRatioSelected(option.resizeMode, option.customRatio)
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = dialogColors.selectedColor,
+                                    unselectedColor = dialogColors.textColor.copy(alpha = 0.6f)
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (selectedOption == index) dialogColors.selectedColor else dialogColors.textColor,
+                                    fontWeight = if (selectedOption == index) FontWeight.Medium else FontWeight.Normal
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = option.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = dialogColors.textColor.copy(alpha = 0.55f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
