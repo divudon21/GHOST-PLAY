@@ -78,7 +78,10 @@ fun PlayerScreen(url: String) {
     val coroutineScope = rememberCoroutineScope()
     val settingsRepository = remember { SettingsRepository(context) }
     
-    // Immersive Mode
+    // Android 11+ compatibility flag
+    val isAndroid11OrAbove = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+    
+    // Immersive Mode - Optimized for Android 11+ and older devices
     DisposableEffect(Unit) {
         activity?.window?.let { window ->
             // Enable drawing under the cutout/notch area
@@ -94,16 +97,6 @@ fun PlayerScreen(url: String) {
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            
-            // Hide the navigation bar completely in landscape
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            )
             
             // Force landscape mode for better viewing
             activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -385,12 +378,6 @@ fun PlayerScreen(url: String) {
                     
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     keepScreenOn = true
-                    systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or 
-                                         View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or 
-                                         View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or 
-                                         View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or 
-                                         View.SYSTEM_UI_FLAG_FULLSCREEN or 
-                                         View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                     
                     setShowNextButton(false)
                     setShowPreviousButton(false)
