@@ -445,26 +445,47 @@ fun PlayerScreen(url: String) {
                     keepScreenOn = true
 
                     subtitleView?.apply {
+                        // Apply embedded styles setting
                         setApplyEmbeddedFontSizes(subtitleEmbeddedStyles)
                         setApplyEmbeddedStyles(subtitleEmbeddedStyles)
-                        setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
-
-                        val typeface = when (subtitleFont) {
-                            SubtitleFont.DEFAULT -> Typeface.DEFAULT
-                            SubtitleFont.MONOSPACE -> Typeface.MONOSPACE
-                            SubtitleFont.SANS_SERIF -> Typeface.SANS_SERIF
-                            SubtitleFont.SERIF -> Typeface.SERIF
+                        
+                        // Only set fixed text size if embedded styles are disabled
+                        if (!subtitleEmbeddedStyles) {
+                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
                         }
 
-                        val style = CaptionStyleCompat(
-                            android.graphics.Color.WHITE,
-                            if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
-                            android.graphics.Color.TRANSPARENT,
-                            if (subtitleBold) CaptionStyleCompat.EDGE_TYPE_OUTLINE else CaptionStyleCompat.EDGE_TYPE_NONE,
-                            android.graphics.Color.BLACK,
-                            typeface
-                        )
-                        setStyle(style)
+                        // Only apply custom style if embedded styles are disabled
+                        // This allows ASS/SSA/WebVTT styled subtitles to show their colors
+                        if (!subtitleEmbeddedStyles) {
+                            val typeface = when (subtitleFont) {
+                                SubtitleFont.DEFAULT -> Typeface.DEFAULT
+                                SubtitleFont.MONOSPACE -> Typeface.MONOSPACE
+                                SubtitleFont.SANS_SERIF -> Typeface.SANS_SERIF
+                                SubtitleFont.SERIF -> Typeface.SERIF
+                            }
+
+                            val style = CaptionStyleCompat(
+                                android.graphics.Color.WHITE,
+                                if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT,
+                                if (subtitleBold) CaptionStyleCompat.EDGE_TYPE_OUTLINE else CaptionStyleCompat.EDGE_TYPE_NONE,
+                                android.graphics.Color.BLACK,
+                                typeface
+                            )
+                            setStyle(style)
+                        } else {
+                            // For styled subtitles (ASS/SSA/WebVTT), set a minimal default style
+                            // that doesn't override colors but provides fallback
+                            val fallbackStyle = CaptionStyleCompat(
+                                android.graphics.Color.WHITE,
+                                if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
+                                android.graphics.Color.TRANSPARENT,
+                                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                                android.graphics.Color.BLACK,
+                                Typeface.DEFAULT
+                            )
+                            setStyle(fallbackStyle)
+                        }
                     }
                     systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or 
                                          View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or 

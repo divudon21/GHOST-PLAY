@@ -198,12 +198,40 @@ fun SubtitleSettingsScreen(
             // Embedded styles
             item {
                 SettingsToggleCard(
-                    title = "Embedded styles",
-                    subtitle = "Apply the embedded styles that are present in subtitle files, such as ASS and so on",
+                    title = "Styled Subtitles",
+                    subtitle = "Show colors, fonts & effects from ASS/SSA, WebVTT files. Disable for plain subtitles.",
                     icon = Icons.Default.Style,
                     checked = subtitleEmbeddedStyles,
                     onCheckedChange = { viewModel.setSubtitleEmbeddedStyles(it) }
                 )
+            }
+            
+            // Supported formats info
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Supported Subtitle Formats",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "• SRT - Basic subtitles\n• WebVTT - Styled with colors\n• ASS/SSA - Full styling support\n• VTT, TTML, TX3G - Various formats",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
     }
