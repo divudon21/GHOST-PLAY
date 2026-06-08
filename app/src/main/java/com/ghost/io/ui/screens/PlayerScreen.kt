@@ -772,10 +772,10 @@ fun PlayerScreen(url: String) {
                                         }
                                         if (currentBrightness < 0f) currentBrightness = 0.5f
                                         
-                                        // Swipe UP (distanceY negative) should INCREASE brightness
-                                        // Swipe DOWN (distanceY positive) should DECREASE brightness
-                                        val sensMultiplier = gestureBrightnessSensitivity * 1.5f
-                                        val newBrightness = (currentBrightness - distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
+                                        // Swipe UP = INCREASE brightness, Swipe DOWN = DECREASE brightness
+                                        // distanceY: positive = finger UP, negative = finger DOWN
+                                        val sensMultiplier = gestureBrightnessSensitivity * 2f
+                                        val newBrightness = (currentBrightness + distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
                                         
                                         // Track the brightness for continuous gestures
                                         trackedBrightness = newBrightness
