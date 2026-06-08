@@ -1,28 +1,32 @@
-# GHOST PLAY - Media Player
+# GHOST PLAY
 
-A beautiful, powerful video and audio player for Android built with Jetpack Compose and Media3.
+A modern media player for Android with support for video streaming and audio playback.
 
-## Optimized Version (v1.1.0-Optimized)
+## Features
 
-**This release is specifically optimized for broader device compatibility**, especially Android 11 devices where the previous version had stability issues.
+- **Video Player** - Stream videos from URL with support for HLS, DASH, RTSP
+- **Audio Player** - Background playback with notification controls
+- **Picture-in-Picture** - Watch while using other apps
+- **Custom Themes** - Light, Dark, and AMOLED modes
+- **Player Customization** - Gestures, thumbnails, appearance settings
 
-### Changes Made:
-- Removed Jellyfin FFmpeg decoder (caused crashes on some Android 11 devices)
-- Added `requestLegacyExternalStorage="true"` for better storage access on older Android versions
-- Updated version code and name
-- Improved decoder fallback to default ExoPlayer decoders
-- Maintained full feature set (URL playback, background audio, gestures, themes, PiP, etc.)
-- Works perfectly on **Realme P4 Pro** and most other devices
+## Requirements
 
-### Features
-- Play from URL or local files
-- Advanced video player with gestures, subtitles, aspect ratio, HQ mode
-- Background audio playback with notification controls
-- Multiple beautiful themes (Purple, Blue, Green, AMOLED, etc.)
-- Highly customizable settings (gestures, thumbnails, player behavior)
-- Picture-in-Picture support
-- Dark & Light themes with dynamic colors
+- Android 7.0 (API 24) or higher
 
-**Tested on Realme P4 Pro. Should now work much better on Android 11 devices.**
+## Installation
 
-Download the optimized APK from Releases.
+1. Download the latest APK from [Releases](https://github.com/divudon21/GHOST-PLAY/releases)
+2. Enable "Install from Unknown Sources" in device settings
+3. Install the APK
+
+## Tech Stack
+
+- Kotlin + Jetpack Compose
+- ExoPlayer (Media3)
+- Material Design 3
+- DataStore for preferences
+
+## License
+
+MIT License
