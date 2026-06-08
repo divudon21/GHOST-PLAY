@@ -796,8 +796,9 @@ fun PlayerScreen(url: String) {
                                     accumulatedVolume -= (distanceY / surface.height) * maxVolume * sensMultiplier
                                     
                                     if (volumeBoostEnabled) {
-                                        // Volume boost mode: 0-200%
-                                        val boostedVolume = accumulatedVolume.coerceIn(0f, maxVolume.toFloat() * 2f)
+                                        // Volume boost mode: 0-130%
+                                        val maxBoostVolume = maxVolume * 1.3f
+                                        val boostedVolume = accumulatedVolume.coerceIn(0f, maxBoostVolume)
                                         val systemVolume = boostedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
                                         val boostMultiplier = if (boostedVolume > maxVolume) {
                                             boostedVolume / maxVolume
@@ -806,9 +807,9 @@ fun PlayerScreen(url: String) {
                                         }
                                         
                                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
-                                        exoPlayer.volume = boostMultiplier.coerceIn(1f, 2f)
+                                        exoPlayer.volume = boostMultiplier.coerceIn(1f, 1.3f)
                                         
-                                        volumePercent = ((boostedVolume / maxVolume) * 100).toInt().coerceAtMost(200)
+                                        volumePercent = ((boostedVolume / maxVolume) * 100).toInt().coerceAtMost(130)
                                     } else {
                                         // Normal mode: 0-100%
                                         val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
@@ -891,7 +892,12 @@ fun PlayerScreen(url: String) {
         // Overlay UI
         if (!isLocked) {
             IndicatorOverlay(Icons.Default.ZoomIn, "$zoomPercent%", showZoom)
-            IndicatorOverlay(Icons.Default.VolumeUp, "$volumePercent%", showVolume)
+            IndicatorOverlay(
+                icon = Icons.Default.VolumeUp, 
+                text = "$volumePercent%", 
+                isVisible = showVolume,
+                textColor = if (volumePercent >= 100) Color(0xFFFF4444) else Color.White
+            )
             IndicatorOverlay(Icons.Default.BrightnessMedium, "$brightnessPercent%", showBrightness)
         }
         
@@ -1336,7 +1342,12 @@ fun TrackOption(
 }
 
 @Composable
-fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
+fun IndicatorOverlay(
+    icon: ImageVector, 
+    text: String, 
+    isVisible: Boolean,
+    textColor: Color = Color.White
+) {
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
@@ -1355,10 +1366,10 @@ fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(32.dp))
                 Text(
                     text = text,
-                    color = Color.White,
+                    color = textColor,
                     style = MaterialTheme.typography.titleLarge
                 )
             }
