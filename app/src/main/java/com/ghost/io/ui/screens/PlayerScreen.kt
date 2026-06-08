@@ -214,9 +214,10 @@ fun PlayerScreen(url: String) {
     val exoPlayer = remember {
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-            
+            .setEnableDecoderFallback(true) // Enable fallback for older devices
+
         val extractorsFactory = DefaultExtractorsFactory()
-        
+
         ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
@@ -357,6 +358,7 @@ fun PlayerScreen(url: String) {
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
+
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
