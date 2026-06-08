@@ -313,6 +313,42 @@ private val IndigoLightColorScheme = lightColorScheme(
     onTertiaryContainer = Color(0xFF001254),
 )
 
+/**
+ * Get color scheme for use outside Composable context (e.g., for dialogs)
+ */
+fun getColorScheme(
+    colorPreference: AppColorPreference,
+    isDark: Boolean
+): androidx.compose.material3.ColorScheme {
+    return if (isDark) {
+        when (colorPreference) {
+            AppColorPreference.PURPLE -> PurpleDarkColorScheme
+            AppColorPreference.BLUE -> BlueDarkColorScheme
+            AppColorPreference.GREEN -> GreenDarkColorScheme
+            AppColorPreference.ORANGE -> OrangeDarkColorScheme
+            AppColorPreference.RED -> RedDarkColorScheme
+            AppColorPreference.PINK -> PinkDarkColorScheme
+            AppColorPreference.TEAL -> TealDarkColorScheme
+            AppColorPreference.YELLOW -> YellowDarkColorScheme
+            AppColorPreference.CYAN -> CyanDarkColorScheme
+            AppColorPreference.INDIGO -> IndigoDarkColorScheme
+        }
+    } else {
+        when (colorPreference) {
+            AppColorPreference.PURPLE -> PurpleLightColorScheme
+            AppColorPreference.BLUE -> BlueLightColorScheme
+            AppColorPreference.GREEN -> GreenLightColorScheme
+            AppColorPreference.ORANGE -> OrangeLightColorScheme
+            AppColorPreference.RED -> RedLightColorScheme
+            AppColorPreference.PINK -> PinkLightColorScheme
+            AppColorPreference.TEAL -> TealLightColorScheme
+            AppColorPreference.YELLOW -> YellowLightColorScheme
+            AppColorPreference.CYAN -> CyanLightColorScheme
+            AppColorPreference.INDIGO -> IndigoLightColorScheme
+        }
+    }
+}
+
 @Composable
 fun AgonAppTheme(
     themePreference: ThemePreference = ThemePreference.SYSTEM,

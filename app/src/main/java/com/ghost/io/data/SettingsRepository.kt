@@ -42,6 +42,10 @@ enum class OrientationPreference {
     AUTO, LANDSCAPE, PORTRAIT, SENSOR_LANDSCAPE
 }
 
+enum class DialogThemePreference {
+    FOLLOW_SYSTEM, DARK, LIGHT, CUSTOM
+}
+
 class SettingsRepository(private val context: Context) {
     private val THEME_KEY = intPreferencesKey("theme_preference")
     private val COLOR_KEY = intPreferencesKey("color_preference")
@@ -74,6 +78,7 @@ class SettingsRepository(private val context: Context) {
     private val REMEMBER_SELECTIONS_KEY = booleanPreferencesKey("remember_selections")
     private val PLAYER_ORIENTATION_KEY = intPreferencesKey("player_orientation")
     private val SYSTEM_CAPTION_STYLE_KEY = booleanPreferencesKey("system_caption_style")
+    private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
 
     val themePreference: Flow<ThemePreference> = context.dataStore.data
         .map { preferences ->
@@ -193,6 +198,12 @@ class SettingsRepository(private val context: Context) {
 
     val systemCaptionStyle: Flow<Boolean> = context.dataStore.data
         .map { it[SYSTEM_CAPTION_STYLE_KEY] ?: false }
+
+    val dialogThemePreference: Flow<DialogThemePreference> = context.dataStore.data
+        .map { preferences ->
+            val value = preferences[DIALOG_THEME_KEY] ?: DialogThemePreference.FOLLOW_SYSTEM.ordinal
+            DialogThemePreference.values()[value]
+        }
 
     suspend fun setThemePreference(preference: ThemePreference) {
         context.dataStore.edit { preferences ->
@@ -328,6 +339,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSystemCaptionStyle(enabled: Boolean) {
         context.dataStore.edit { it[SYSTEM_CAPTION_STYLE_KEY] = enabled }
+    }
+
+    suspend fun setDialogTheme(theme: DialogThemePreference) {
+        context.dataStore.edit { it[DIALOG_THEME_KEY] = theme.ordinal }
     }
 
     suspend fun resetAllSettings() {

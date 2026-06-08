@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.NightlightRound
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.io.data.AppColorPreference
+import com.ghost.io.data.DialogThemePreference
 import com.ghost.io.data.ThemePreference
 import com.ghost.io.data.ViewLayout
 import com.ghost.io.viewmodel.SettingsViewModel
@@ -36,12 +39,20 @@ fun AppearanceSettingsScreen(
     val currentTheme by viewModel.themePreference.collectAsState()
     val currentColor by viewModel.colorPreference.collectAsState()
     val currentLayout by viewModel.viewLayout.collectAsState()
+    val currentDialogTheme by viewModel.dialogThemePreference.collectAsState()
 
     val themeOptions = listOf(
         ThemeOption("System Default", Icons.Default.BrightnessAuto, ThemePreference.SYSTEM),
         ThemeOption("Light", Icons.Default.Brightness7, ThemePreference.LIGHT),
         ThemeOption("Dark", Icons.Default.Brightness4, ThemePreference.DARK),
         ThemeOption("AMOLED Dark", Icons.Default.NightlightRound, ThemePreference.AMOLED)
+    )
+
+    val dialogThemeOptions = listOf(
+        DialogThemeOption("Follow System", Icons.Default.BrightnessAuto, DialogThemePreference.FOLLOW_SYSTEM),
+        DialogThemeOption("Dark", Icons.Default.Brightness4, DialogThemePreference.DARK),
+        DialogThemeOption("Light", Icons.Default.Brightness7, DialogThemePreference.LIGHT),
+        DialogThemeOption("Custom (App Color)", Icons.Default.Palette, DialogThemePreference.CUSTOM)
     )
 
     val colorOptions = listOf(
@@ -161,6 +172,77 @@ fun AppearanceSettingsScreen(
                     onClick = { viewModel.setTheme(option.preference) }
                 )
             }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Dialog Theme",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            item {
+                Text(
+                    text = "Choose how dialogs appear in the player (Quality, Audio, Subtitles)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            items(dialogThemeOptions) { option ->
+                DialogThemeOptionCard(
+                    option = option,
+                    isSelected = currentDialogTheme == option.preference,
+                    onClick = { viewModel.setDialogTheme(option.preference) }
+                )
+            }
+        }
+    }
+}
+
+data class DialogThemeOption(
+    val title: String,
+    val icon: ImageVector,
+    val preference: DialogThemePreference
+)
+
+@Composable
+fun DialogThemeOptionCard(
+    option: DialogThemeOption,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = option.icon,
+                contentDescription = null,
+                tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = option.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

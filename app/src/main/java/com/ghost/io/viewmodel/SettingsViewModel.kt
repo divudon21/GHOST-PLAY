@@ -10,6 +10,7 @@ import com.ghost.io.data.SettingsRepository
 import com.ghost.io.data.SubtitleFont
 import com.ghost.io.data.ThemePreference
 import com.ghost.io.data.ThumbnailStrategy
+import com.ghost.io.data.DialogThemePreference
 import com.ghost.io.data.ViewLayout
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -236,6 +237,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
+    val dialogThemePreference: StateFlow<DialogThemePreference> = repository.dialogThemePreference
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DialogThemePreference.FOLLOW_SYSTEM
+        )
+
     fun setTheme(theme: ThemePreference) {
         viewModelScope.launch {
             repository.setThemePreference(theme)
@@ -370,6 +378,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setSystemCaptionStyle(enabled: Boolean) {
         viewModelScope.launch { repository.setSystemCaptionStyle(enabled) }
+    }
+
+    fun setDialogTheme(theme: DialogThemePreference) {
+        viewModelScope.launch { repository.setDialogTheme(theme) }
     }
 
     fun resetAllSettings() {

@@ -26,7 +26,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.FastForward
@@ -35,11 +40,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,8 +49,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -68,7 +72,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
-import androidx.media3.ui.TrackSelectionDialogBuilder
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
@@ -77,9 +80,13 @@ import android.widget.PopupMenu
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.ghost.io.data.AppColorPreference
 import com.ghost.io.data.DecoderPriority
+import com.ghost.io.data.DialogThemePreference
 import com.ghost.io.data.SettingsRepository
 import com.ghost.io.data.SubtitleFont
+import com.ghost.io.data.ThemePreference
+import com.ghost.io.ui.theme.getColorScheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -101,6 +108,11 @@ fun PlayerScreen(url: String) {
     // PlayerView reference for controlling visibility
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     
+    // Dialog states
+    var showQualityDialog by remember { mutableStateOf(false) }
+    var showAudioDialog by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
+    
     // Collect settings
     val decoderPriority by settingsRepository.decoderPriority.collectAsState(initial = DecoderPriority.PREFER_DEVICE)
     val subtitleFont by settingsRepository.subtitleFont.collectAsState(initial = SubtitleFont.DEFAULT)
@@ -108,6 +120,9 @@ fun PlayerScreen(url: String) {
     val subtitleSize by settingsRepository.subtitleSize.collectAsState(initial = 20)
     val subtitleBackground by settingsRepository.subtitleBackground.collectAsState(initial = false)
     val subtitleEmbeddedStyles by settingsRepository.subtitleEmbeddedStyles.collectAsState(initial = true)
+    val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
+    val appColorPreference by settingsRepository.colorPreference.collectAsState(initial = AppColorPreference.PURPLE)
+    val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
 
     // Immersive Mode
     DisposableEffect(Unit) {
@@ -152,15 +167,13 @@ fun PlayerScreen(url: String) {
         }
     }
     
-    // Handle lock state changes - immediately hide/show controls
+    // Handle lock state changes
     LaunchedEffect(isLocked) {
         playerViewRef?.let { playerView ->
             if (isLocked) {
-                // Immediately hide all controls
                 playerView.useController = false
                 playerView.hideController()
             } else {
-                // Re-enable controls
                 playerView.useController = true
             }
         }
@@ -404,6 +417,9 @@ fun PlayerScreen(url: String) {
         }
     }
     
+    // Get dialog colors based on preference
+    val dialogColors = rememberDialogColors(dialogThemePreference, appColorPreference, themePreference)
+    
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
@@ -460,12 +476,10 @@ fun PlayerScreen(url: String) {
                     setShowNextButton(false)
                     setShowPreviousButton(false)
                     
-                    // Store reference for lock control
                     playerViewRef = this
                     
                     val basicControls = findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_basic_controls)
                     
-                    // Helper function for button click feedback
                     fun ImageView.setClickFeedback(onClick: () -> Unit) {
                         setOnClickListener {
                             setColorFilter(android.graphics.Color.CYAN)
@@ -488,15 +502,7 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback {
-                            val builder = TrackSelectionDialogBuilder(
-                                ctx,
-                                "Select Video Quality",
-                                exoPlayer,
-                                C.TRACK_TYPE_VIDEO
-                            )
-                            builder.build().show()
-                        }
+                        setClickFeedback { showQualityDialog = true }
                     }
                     
                     // Audio Track Button
@@ -511,36 +517,7 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback {
-                            val builder = TrackSelectionDialogBuilder(
-                                ctx,
-                                "Select Audio Track",
-                                exoPlayer,
-                                C.TRACK_TYPE_AUDIO
-                            )
-                            builder.setTrackNameProvider { format ->
-                                val language = format.language ?: "Unknown"
-                                val label = format.label
-                                val bitrate = if (format.bitrate > 0) "${format.bitrate / 1000} kbps" else ""
-                                val channels = if (format.channelCount > 0) "${format.channelCount} ch" else ""
-                                
-                                val info = mutableListOf<String>()
-                                info.add(language.uppercase())
-                                
-                                if (label != null && label.isNotEmpty()) {
-                                    info.add("($label)")
-                                }
-                                if (channels.isNotEmpty()) {
-                                    info.add(channels)
-                                }
-                                if (bitrate.isNotEmpty()) {
-                                    info.add(bitrate)
-                                }
-                                
-                                info.joinToString(" ")
-                            }
-                            builder.build().show()
-                        }
+                        setClickFeedback { showAudioDialog = true }
                     }
                     
                     val ccButton = android.widget.ImageView(ctx).apply {
@@ -554,36 +531,7 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback {
-                            val builder = TrackSelectionDialogBuilder(
-                                ctx,
-                                "Select Subtitles",
-                                exoPlayer,
-                                C.TRACK_TYPE_TEXT
-                            )
-                            builder.setTrackNameProvider { format ->
-                                val language = format.language ?: "Unknown"
-                                val label = format.label
-                                val roleFlags = format.roleFlags
-                                
-                                val info = mutableListOf<String>()
-                                info.add(language.uppercase())
-                                
-                                if (label != null && label.isNotEmpty()) {
-                                    info.add(label)
-                                }
-                                
-                                if ((format.selectionFlags and androidx.media3.common.C.SELECTION_FLAG_FORCED) != 0) {
-                                    info.add("[Forced]")
-                                }
-                                if ((roleFlags and androidx.media3.common.C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) {
-                                    info.add("[SDH]")
-                                }
-                                
-                                info.joinToString(" ")
-                            }
-                            builder.build().show()
-                        }
+                        setClickFeedback { showSubtitleDialog = true }
                     }
                     
                     // Aspect Ratio Button
@@ -641,7 +589,7 @@ fun PlayerScreen(url: String) {
                         }
                     }
                     
-                    // PiP Button - Directly enters PiP mode
+                    // PiP Button
                     val pipButton = ImageView(ctx).apply {
                         setImageResource(R.drawable.ic_pip)
                         setColorFilter(android.graphics.Color.WHITE)
@@ -668,7 +616,7 @@ fun PlayerScreen(url: String) {
                         }
                     }
                     
-                    // Lock Button - Immediately hides UI
+                    // Lock Button
                     val lockButton = ImageView(ctx).apply {
                         setImageResource(R.drawable.ic_lock)
                         setColorFilter(android.graphics.Color.WHITE)
@@ -683,13 +631,11 @@ fun PlayerScreen(url: String) {
                         )
                         
                         setOnClickListener {
-                            // Flash cyan
                             setColorFilter(android.graphics.Color.CYAN)
                             postDelayed({
                                 setColorFilter(android.graphics.Color.WHITE)
                             }, 200)
                             
-                            // Immediately hide controls and lock
                             useController = false
                             hideController()
                             isLocked = true
@@ -882,7 +828,6 @@ fun PlayerScreen(url: String) {
                 }
             },
             update = { playerView ->
-                // Update lock state
                 if (isLocked) {
                     playerView.useController = false
                 } else {
@@ -925,7 +870,7 @@ fun PlayerScreen(url: String) {
             }
         }
         
-        // Overlay UI (only when not locked)
+        // Overlay UI
         if (!isLocked) {
             IndicatorOverlay(Icons.Default.ZoomIn, "$zoomPercent%", showZoom)
             IndicatorOverlay(Icons.Default.VolumeUp, "$volumePercent%", showVolume)
@@ -963,6 +908,269 @@ fun PlayerScreen(url: String) {
                 }
             }
         }
+    }
+    
+    // Quality Dialog
+    if (showQualityDialog) {
+        TrackSelectionDialog(
+            title = "Video Quality",
+            exoPlayer = exoPlayer,
+            trackType = C.TRACK_TYPE_VIDEO,
+            onDismiss = { showQualityDialog = false },
+            dialogColors = dialogColors
+        )
+    }
+    
+    // Audio Dialog
+    if (showAudioDialog) {
+        TrackSelectionDialog(
+            title = "Audio Track",
+            exoPlayer = exoPlayer,
+            trackType = C.TRACK_TYPE_AUDIO,
+            onDismiss = { showAudioDialog = false },
+            dialogColors = dialogColors
+        )
+    }
+    
+    // Subtitle Dialog
+    if (showSubtitleDialog) {
+        TrackSelectionDialog(
+            title = "Subtitles",
+            exoPlayer = exoPlayer,
+            trackType = C.TRACK_TYPE_TEXT,
+            onDismiss = { showSubtitleDialog = false },
+            dialogColors = dialogColors
+        )
+    }
+}
+
+@Composable
+fun rememberDialogColors(
+    dialogTheme: DialogThemePreference,
+    appColor: AppColorPreference,
+    themePreference: ThemePreference
+): DialogColors {
+    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    
+    return remember(dialogTheme, appColor, themePreference, isSystemDark) {
+        when (dialogTheme) {
+            DialogThemePreference.FOLLOW_SYSTEM -> {
+                if (isSystemDark) DialogColors.Dark else DialogColors.Light
+            }
+            DialogThemePreference.DARK -> DialogColors.Dark
+            DialogThemePreference.LIGHT -> DialogColors.Light
+            DialogThemePreference.CUSTOM -> {
+                val colorScheme = getColorScheme(appColor, true)
+                DialogColors.Custom(
+                    backgroundColor = colorScheme.surface,
+                    textColor = colorScheme.onSurface,
+                    selectedColor = colorScheme.primary,
+                    selectedTextColor = colorScheme.onPrimary
+                )
+            }
+        }
+    }
+}
+
+data class DialogColors(
+    val backgroundColor: Color,
+    val textColor: Color,
+    val selectedColor: Color,
+    val selectedTextColor: Color
+) {
+    companion object {
+        val Dark = DialogColors(
+            backgroundColor = Color(0xFF1E1E1E),
+            textColor = Color.White,
+            selectedColor = Color(0xFFBB86FC),
+            selectedTextColor = Color.Black
+        )
+        
+        val Light = DialogColors(
+            backgroundColor = Color.White,
+            textColor = Color.Black,
+            selectedColor = Color(0xFF6200EE),
+            selectedTextColor = Color.White
+        )
+        
+        fun Custom(backgroundColor: Color, textColor: Color, selectedColor: Color, selectedTextColor: Color) = DialogColors(
+            backgroundColor = backgroundColor,
+            textColor = textColor,
+            selectedColor = selectedColor,
+            selectedTextColor = selectedTextColor
+        )
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+fun TrackSelectionDialog(
+    title: String,
+    exoPlayer: ExoPlayer,
+    trackType: Int,
+    onDismiss: () -> Unit,
+    dialogColors: DialogColors
+) {
+    val tracks = exoPlayer.currentTracks
+    var selectedOverride by remember { mutableStateOf<TrackSelectionOverride?>(null) }
+    
+    // Find the track group for this type
+    val trackGroups = remember(tracks) {
+        val groups = mutableListOf<Pair<Tracks.Group, Int>>()
+        for (group in tracks.groups) {
+            if (group.type == trackType) {
+                for (i in 0 until group.length) {
+                    groups.add(group to i)
+                }
+            }
+        }
+        groups
+    }
+    
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .width(320.dp)
+                .wrapContentHeight()
+                .clip(RoundedCornerShape(16.dp)),
+            color = dialogColors.backgroundColor
+        ) {
+            Column(
+                modifier = Modifier.padding(vertical = 16.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = dialogColors.textColor,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+                
+                HorizontalDivider(
+                    color = dialogColors.textColor.copy(alpha = 0.1f),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                LazyColumn(
+                    modifier = Modifier
+                        .heightIn(max = 400.dp)
+                        .padding(vertical = 8.dp)
+                ) {
+                    // Add "None" option for subtitles
+                    if (trackType == C.TRACK_TYPE_TEXT) {
+                        item {
+                            val isSelected = trackGroups.isEmpty() || !tracks.groups.any { 
+                                it.type == C.TRACK_TYPE_TEXT && it.isSelected 
+                            }
+                            TrackOption(
+                                label = "None",
+                                isSelected = isSelected,
+                                dialogColors = dialogColors,
+                                onClick = {
+                                    // Clear subtitle override
+                                    val params = exoPlayer.trackSelectionParameters
+                                        .buildUpon()
+                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                        .build()
+                                    exoPlayer.trackSelectionParameters = params
+                                    onDismiss()
+                                }
+                            )
+                        }
+                    }
+                    
+                    items(trackGroups) { (group, trackIndex) ->
+                        val format = group.getTrackFormat(trackIndex)
+                        val isSelected = group.isTrackSelected(trackIndex)
+                        
+                        val label = when (trackType) {
+                            C.TRACK_TYPE_VIDEO -> {
+                                val width = format.width
+                                val height = format.height
+                                val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
+                                if (width > 0 && height > 0) "${width}x${height}$bitrate" else format.label ?: "Video"
+                            }
+                            C.TRACK_TYPE_AUDIO -> {
+                                val lang = format.language?.uppercase() ?: "Unknown"
+                                val channels = if (format.channelCount > 0) " • ${format.channelCount}ch" else ""
+                                val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
+                                val labelStr = format.label?.let { " ($it)" } ?: ""
+                                "$lang$labelStr$channels$bitrate"
+                            }
+                            C.TRACK_TYPE_TEXT -> {
+                                val lang = format.language?.uppercase() ?: "Unknown"
+                                val labelStr = format.label?.let { " ($it)" } ?: ""
+                                val forced = if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) " [Forced]" else ""
+                                val sdh = if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) " [SDH]" else ""
+                                "$lang$labelStr$forced$sdh"
+                            }
+                            else -> format.label ?: "Track $trackIndex"
+                        }
+                        
+                        TrackOption(
+                            label = label,
+                            isSelected = isSelected,
+                            dialogColors = dialogColors,
+                            onClick = {
+                                val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
+                                val params = exoPlayer.trackSelectionParameters
+                                    .buildUpon()
+                                    .setOverrideForType(override)
+                                    .build()
+                                exoPlayer.trackSelectionParameters = params
+                                onDismiss()
+                            }
+                        )
+                    }
+                    
+                    if (trackGroups.isEmpty() && trackType != C.TRACK_TYPE_TEXT) {
+                        item {
+                            Text(
+                                text = "No tracks available",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = dialogColors.textColor.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrackOption(
+    label: String,
+    isSelected: Boolean,
+    dialogColors: DialogColors,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = isSelected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = dialogColors.selectedColor,
+                unselectedColor = dialogColors.textColor.copy(alpha = 0.6f)
+            )
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isSelected) dialogColors.selectedColor else dialogColors.textColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
