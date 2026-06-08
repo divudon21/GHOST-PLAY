@@ -647,6 +647,7 @@ fun PlayerScreen(url: String) {
                     var isBrightnessScroll = false
                     var isVolumeScroll = false
                     var accumulatedVolume = 0f
+                    var trackedBrightness = -1f  // Track brightness across gestures
                     
                     val scaleDetector = if (gestureZoomEnabled) {
                         android.view.ScaleGestureDetector(ctx, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -706,6 +707,7 @@ fun PlayerScreen(url: String) {
                             if (isLocked) return false
                             isBrightnessScroll = false
                             isVolumeScroll = false
+                            // Always get current system volume at start of gesture
                             accumulatedVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
                             return false
                         }
@@ -762,13 +764,22 @@ fun PlayerScreen(url: String) {
                                 if (isBrightnessScroll && gestureBrightnessEnabled) {
                                     activity?.window?.let { window ->
                                         val lp = window.attributes
-                                        var currentBrightness = lp.screenBrightness
+                                        // Use tracked brightness or get from window
+                                        var currentBrightness = if (trackedBrightness >= 0f) {
+                                            trackedBrightness
+                                        } else {
+                                            lp.screenBrightness
+                                        }
                                         if (currentBrightness < 0f) currentBrightness = 0.5f
                                         
                                         // Swipe UP (distanceY negative) should INCREASE brightness
                                         // Swipe DOWN (distanceY positive) should DECREASE brightness
                                         val sensMultiplier = gestureBrightnessSensitivity * 1.5f
                                         val newBrightness = (currentBrightness - distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
+                                        
+                                        // Track the brightness for continuous gestures
+                                        trackedBrightness = newBrightness
+                                        
                                         lp.screenBrightness = newBrightness
                                         window.attributes = lp
                                         
