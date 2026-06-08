@@ -1054,7 +1054,8 @@ fun TrackSelectionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .width(320.dp)
+                .widthIn(min = 320.dp, max = 450.dp)
+                .fillMaxWidth(0.92f)
                 .wrapContentHeight()
                 .clip(RoundedCornerShape(16.dp)),
             color = dialogColors.backgroundColor
@@ -1076,7 +1077,7 @@ fun TrackSelectionDialog(
                 
                 LazyColumn(
                     modifier = Modifier
-                        .heightIn(max = 400.dp)
+                        .heightIn(max = 450.dp)
                         .padding(vertical = 8.dp)
                 ) {
                     // Add "None" option for subtitles
@@ -1087,10 +1088,10 @@ fun TrackSelectionDialog(
                             }
                             TrackOption(
                                 label = "None",
+                                subtitle = "Disable subtitles",
                                 isSelected = isSelected,
                                 dialogColors = dialogColors,
                                 onClick = {
-                                    // Clear subtitle override
                                     val params = exoPlayer.trackSelectionParameters
                                         .buildUpon()
                                         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -1106,44 +1107,120 @@ fun TrackSelectionDialog(
                         val format = group.getTrackFormat(trackIndex)
                         val isSelected = group.isTrackSelected(trackIndex)
                         
-                        val label = when (trackType) {
+                        when (trackType) {
                             C.TRACK_TYPE_VIDEO -> {
                                 val width = format.width
                                 val height = format.height
                                 val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
-                                if (width > 0 && height > 0) "${width}x${height}$bitrate" else format.label ?: "Video"
+                                val frameRate = if (format.frameRate > 0) " • ${format.frameRate.toInt()} fps" else ""
+                                val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
+                                val label = if (width > 0 && height > 0) "${width}x${height}$bitrate$frameRate" else format.label ?: "Video"
+                                val subtitle = if (codec.isNotEmpty()) "Codec: $codec" else null
+                                
+                                TrackOption(
+                                    label = label,
+                                    subtitle = subtitle,
+                                    isSelected = isSelected,
+                                    dialogColors = dialogColors,
+                                    onClick = {
+                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
+                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                                            .buildUpon().setOverrideForType(override).build()
+                                        onDismiss()
+                                    }
+                                )
                             }
                             C.TRACK_TYPE_AUDIO -> {
                                 val lang = format.language?.uppercase() ?: "Unknown"
-                                val channels = if (format.channelCount > 0) " • ${format.channelCount}ch" else ""
-                                val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
-                                val labelStr = format.label?.let { " ($it)" } ?: ""
-                                "$lang$labelStr$channels$bitrate"
+                                val labelStr = format.label ?: ""
+                                val channels = when (format.channelCount) {
+                                    1 -> "Mono"
+                                    2 -> "Stereo"
+                                    6 -> "5.1 Surround"
+                                    8 -> "7.1 Surround"
+                                    in 3..5 -> "${format.channelCount}ch"
+                                    else -> ""
+                                }
+                                val bitrate = if (format.bitrate > 0) "${format.bitrate / 1000} kbps" else ""
+                                val sampleRate = if (format.sampleRate > 0) "${format.sampleRate / 1000} kHz" else ""
+                                val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
+                                
+                                val mainLabel = buildString {
+                                    append(lang)
+                                    if (labelStr.isNotEmpty()) append(" • $labelStr")
+                                }
+                                val subtitle = buildList {
+                                    if (channels.isNotEmpty()) add(channels)
+                                    if (bitrate.isNotEmpty()) add(bitrate)
+                                    if (sampleRate.isNotEmpty()) add(sampleRate)
+                                    if (codec.isNotEmpty()) add(codec)
+                                }.joinToString(" • ")
+                                
+                                TrackOption(
+                                    label = mainLabel,
+                                    subtitle = subtitle.ifEmpty { null },
+                                    isSelected = isSelected,
+                                    dialogColors = dialogColors,
+                                    onClick = {
+                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
+                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                                            .buildUpon().setOverrideForType(override).build()
+                                        onDismiss()
+                                    }
+                                )
                             }
                             C.TRACK_TYPE_TEXT -> {
                                 val lang = format.language?.uppercase() ?: "Unknown"
-                                val labelStr = format.label?.let { " ($it)" } ?: ""
-                                val forced = if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) " [Forced]" else ""
-                                val sdh = if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) " [SDH]" else ""
-                                "$lang$labelStr$forced$sdh"
+                                val labelStr = format.label ?: ""
+                                val mimeType = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
+                                
+                                val flags = buildList {
+                                    if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) add("Forced")
+                                    if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) add("SDH")
+                                    if ((format.roleFlags and C.ROLE_FLAG_CAPTION) != 0) add("Caption")
+                                    if ((format.roleFlags and C.ROLE_FLAG_SUBTITLE) != 0) add("Subtitle")
+                                    if ((format.roleFlags and C.ROLE_FLAG_DUB) != 0) add("Dub")
+                                    if ((format.roleFlags and C.ROLE_FLAG_COMMENTARY) != 0) add("Commentary")
+                                    if ((format.roleFlags and C.ROLE_FLAG_EASY_TO_READ) != 0) add("Easy Read")
+                                }
+                                
+                                val mainLabel = buildString {
+                                    append(lang)
+                                    if (labelStr.isNotEmpty() && labelStr != lang) append(" • $labelStr")
+                                }
+                                val subtitle = buildList {
+                                    addAll(flags)
+                                    if (mimeType.isNotEmpty()) add(mimeType)
+                                }.joinToString(" • ")
+                                
+                                TrackOption(
+                                    label = mainLabel,
+                                    subtitle = subtitle.ifEmpty { null },
+                                    isSelected = isSelected,
+                                    dialogColors = dialogColors,
+                                    onClick = {
+                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
+                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                                            .buildUpon().setOverrideForType(override).build()
+                                        onDismiss()
+                                    }
+                                )
                             }
-                            else -> format.label ?: "Track $trackIndex"
+                            else -> {
+                                TrackOption(
+                                    label = format.label ?: "Track $trackIndex",
+                                    subtitle = null,
+                                    isSelected = isSelected,
+                                    dialogColors = dialogColors,
+                                    onClick = {
+                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
+                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                                            .buildUpon().setOverrideForType(override).build()
+                                        onDismiss()
+                                    }
+                                )
+                            }
                         }
-                        
-                        TrackOption(
-                            label = label,
-                            isSelected = isSelected,
-                            dialogColors = dialogColors,
-                            onClick = {
-                                val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
-                                val params = exoPlayer.trackSelectionParameters
-                                    .buildUpon()
-                                    .setOverrideForType(override)
-                                    .build()
-                                exoPlayer.trackSelectionParameters = params
-                                onDismiss()
-                            }
-                        )
                     }
                     
                     if (trackGroups.isEmpty() && trackType != C.TRACK_TYPE_TEXT) {
@@ -1165,6 +1242,7 @@ fun TrackSelectionDialog(
 @Composable
 fun TrackOption(
     label: String,
+    subtitle: String?,
     isSelected: Boolean,
     dialogColors: DialogColors,
     onClick: () -> Unit
@@ -1173,7 +1251,7 @@ fun TrackOption(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = if (subtitle != null) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
@@ -1185,13 +1263,25 @@ fun TrackOption(
             )
         )
         Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (isSelected) dialogColors.selectedColor else dialogColors.textColor,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isSelected) dialogColors.selectedColor else dialogColors.textColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.7f) else dialogColors.textColor.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
