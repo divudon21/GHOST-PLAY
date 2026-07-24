@@ -3,9 +3,14 @@ package com.ghost.video.ui.screens
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.MusicNote
@@ -22,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -171,26 +177,22 @@ fun AudioPlayerScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Seek bar
-            Slider(
-                value = sliderValue,
-                onValueChange = {
+            // Seek bar — thick rounded pill style (no thumb), draggable/tappable.
+            PillProgressBar(
+                progress = sliderValue,
+                onSeek = { fraction ->
                     isUserSeeking = true
-                    seekPreview = it
+                    seekPreview = fraction.coerceIn(0f, 1f)
                 },
-                onValueChangeFinished = {
+                onSeekFinished = {
                     val target = (seekPreview * effectiveDuration).toLong()
                     audioViewModel.seekTo(target)
                     positionMs = target
                     isUserSeeking = false
                 },
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -198,12 +200,14 @@ fun AudioPlayerScreen(
                 Text(
                     text = formatMillis(if (isUserSeeking) (seekPreview * effectiveDuration).toLong() else positionMs),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = formatMillis(durationMs),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -267,6 +271,61 @@ fun AudioPlayerScreen(
 
             Spacer(modifier = Modifier.weight(0.6f))
         }
+    }
+}
+
+/**
+ * Thick rounded "pill" progress bar (matches the reference screenshot):
+ *  - A tall, fully-rounded inactive track.
+ *  - A fully-rounded filled portion on top — no circular thumb.
+ *  - Tap anywhere or drag horizontally to seek.
+ */
+@Composable
+private fun PillProgressBar(
+    progress: Float,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 12.dp
+) {
+    val density = LocalDensity.current
+    var widthPx by remember { mutableStateOf(1f) }
+    val safeProgress = progress.coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .height(height)
+            .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    onSeek(offset.x / widthPx)
+                    onSeekFinished()
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset -> onSeek(offset.x / widthPx) },
+                    onHorizontalDrag = { change, _ -> onSeek(change.position.x / widthPx) },
+                    onDragEnd = { onSeekFinished() },
+                    onDragCancel = { onSeekFinished() }
+                )
+            }
+    ) {
+        // Inactive track (full width, rounded).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
+        )
+        // Active fill (rounded pill).
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(safeProgress)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f))
+        )
     }
 }
 

@@ -49,6 +49,18 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Generate per-ABI APKs (arm64-v8a, armeabi-v7a) plus one universal APK that
+    // contains all ABIs. This keeps device-specific downloads small while still
+    // shipping a universal build for maximum compatibility.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
+        }
+    }
 }
 
 dependencies {
