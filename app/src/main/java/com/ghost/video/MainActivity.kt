@@ -43,6 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import com.ghost.video.viewmodel.AudioViewModel
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -50,6 +53,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.ghost.video.ui.screens.AudioPlayerScreen
 import com.ghost.video.ui.screens.AudioScreen
 import com.ghost.video.ui.screens.AudioSettingsScreen
+import com.ghost.video.ui.screens.BatterySaverScreen
+import com.ghost.video.ui.screens.AppUpdateScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -172,6 +177,15 @@ class MainActivity : ComponentActivity() {
         var externalVideoUrl: String? = null
         if (intent?.action == Intent.ACTION_VIEW) {
             externalVideoUrl = intent.data?.toString()
+        }
+
+        // If the user previously enabled update notifications, make sure the daily
+        // background check is (re)scheduled after an app restart / reboot.
+        lifecycleScope.launch {
+            val repo = com.ghost.video.data.SettingsRepository(applicationContext)
+            if (repo.updateNotifications.first()) {
+                com.ghost.video.data.UpdateWorker.schedule(applicationContext)
+            }
         }
 
         setContent {
@@ -435,7 +449,9 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                     onNavigateToDecoder = { navController.navigate("decoder_settings") { launchSingleTop = true } },
                     onNavigateToAudio = { navController.navigate("audio_settings") { launchSingleTop = true } },
                     onNavigateToSubtitle = { navController.navigate("subtitle_settings") { launchSingleTop = true } },
-                    onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } }
+                    onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } },
+                    onNavigateToBatterySaver = { navController.navigate("battery_saver") { launchSingleTop = true } },
+                    onNavigateToAppUpdate = { navController.navigate("app_update") { launchSingleTop = true } }
                 )
             }
             composable(
@@ -530,6 +546,30 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                 popExitTransition = { TAB_SLIDE_OUT_RIGHT }
             ) {
                 AudioSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = sharedSettingsViewModel
+                )
+            }
+            composable(
+                "battery_saver",
+                enterTransition = { TAB_SLIDE_IN_RIGHT },
+                exitTransition = { TAB_SLIDE_OUT_LEFT },
+                popEnterTransition = { TAB_SLIDE_IN_LEFT },
+                popExitTransition = { TAB_SLIDE_OUT_RIGHT }
+            ) {
+                BatterySaverScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = sharedSettingsViewModel
+                )
+            }
+            composable(
+                "app_update",
+                enterTransition = { TAB_SLIDE_IN_RIGHT },
+                exitTransition = { TAB_SLIDE_OUT_LEFT },
+                popEnterTransition = { TAB_SLIDE_IN_LEFT },
+                popExitTransition = { TAB_SLIDE_OUT_RIGHT }
+            ) {
+                AppUpdateScreen(
                     onBack = { navController.popBackStack() },
                     viewModel = sharedSettingsViewModel
                 )

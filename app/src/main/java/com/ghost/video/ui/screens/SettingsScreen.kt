@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.BatterySaver
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Gesture
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Memory
@@ -43,7 +45,9 @@ fun SettingsScreen(
     onNavigateToDecoder: () -> Unit = {},
     onNavigateToAudio: () -> Unit = {},
     onNavigateToSubtitle: () -> Unit = {},
-    onNavigateToGeneral: () -> Unit = {}
+    onNavigateToGeneral: () -> Unit = {},
+    onNavigateToBatterySaver: () -> Unit = {},
+    onNavigateToAppUpdate: () -> Unit = {}
 ) {
     val currentTheme by viewModel.themePreference.collectAsState()
     val currentStrategy by viewModel.thumbnailStrategy.collectAsState()
@@ -102,6 +106,18 @@ fun SettingsScreen(
             subtitle = "User data options",
             icon = Icons.Rounded.Tune,
             onClick = onNavigateToGeneral
+        ),
+        SettingsCategory(
+            title = "Battery saver",
+            subtitle = "Reduce power usage",
+            icon = Icons.Rounded.BatterySaver,
+            onClick = onNavigateToBatterySaver
+        ),
+        SettingsCategory(
+            title = "App update",
+            subtitle = "Check for new versions",
+            icon = Icons.Rounded.SystemUpdate,
+            onClick = onNavigateToAppUpdate
         )
     )
 

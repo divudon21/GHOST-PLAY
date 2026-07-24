@@ -280,6 +280,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = android.graphics.Color.parseColor("#6750A4")
         )
 
+    val batterySaver: StateFlow<Boolean> = repository.batterySaver
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
+    val updateNotifications: StateFlow<Boolean> = repository.updateNotifications
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
     fun setTheme(theme: ThemePreference) {
         viewModelScope.launch {
             repository.setThemePreference(theme)
@@ -434,6 +448,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setCustomColorValue(color: Int) {
         viewModelScope.launch { repository.setCustomColorValue(color) }
+    }
+
+    fun setBatterySaver(enabled: Boolean) {
+        viewModelScope.launch { repository.setBatterySaver(enabled) }
+    }
+
+    fun setUpdateNotifications(enabled: Boolean) {
+        viewModelScope.launch { repository.setUpdateNotifications(enabled) }
+    }
+
+    fun setLastSeenRelease(tag: String) {
+        viewModelScope.launch { repository.setLastSeenRelease(tag) }
     }
 
     /**

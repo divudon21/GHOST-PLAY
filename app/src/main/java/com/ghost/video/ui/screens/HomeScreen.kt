@@ -95,6 +95,9 @@ fun HomeScreen(
     // flow collectors and caused scroll/tap jitter.
     val thumbnailStrategy by settingsViewModel.thumbnailStrategy.collectAsState()
     val thumbnailPositionPercent by settingsViewModel.thumbnailPositionPercent.collectAsState()
+    // Battery saver skips thumbnail decoding (the most power-hungry work on this
+    // screen) and shows a lightweight placeholder instead.
+    val batterySaver by settingsViewModel.batterySaver.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -187,6 +190,7 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
+                                batterySaver = batterySaver,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
                             )
@@ -204,6 +208,7 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
+                                batterySaver = batterySaver,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
                             )
@@ -221,6 +226,7 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
+                                batterySaver = batterySaver,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
                             )
@@ -237,6 +243,7 @@ fun VideoThumbnailCard(
     video: LocalVideo,
     strategy: ThumbnailStrategy,
     positionPercent: Int,
+    batterySaver: Boolean,
     onClick: () -> Unit,
     onChanged: () -> Unit
 ) {
@@ -246,11 +253,13 @@ fun VideoThumbnailCard(
     val cacheKey = "video:${video.uri}:$strategy:$positionPercent"
     val cached = remember(cacheKey) { com.ghost.video.data.ThumbnailCache.get(cacheKey) }
     var thumbnailBitmap by remember(cacheKey) { mutableStateOf(cached) }
-    var isLoading by remember(cacheKey) { mutableStateOf(cached == null) }
+    var isLoading by remember(cacheKey, batterySaver) { mutableStateOf(cached == null && !batterySaver) }
     var menuExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(cacheKey) {
-        if (cached == null) {
+    LaunchedEffect(cacheKey, batterySaver) {
+        // Battery saver: skip the expensive frame decode entirely and just show
+        // the placeholder icon.
+        if (cached == null && !batterySaver) {
             isLoading = true
             thumbnailBitmap = getVideoThumbnail(context, video.uri, video.duration, strategy, positionPercent)
             isLoading = false
@@ -288,9 +297,8 @@ fun VideoThumbnailCard(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(26.dp),
-                                strokeWidth = 2.dp
+                            com.ghost.video.ui.components.GhostLoadingIndicator(
+                                size = 40.dp
                             )
                         }
                     } else {
@@ -448,6 +456,7 @@ fun VideoListItem(
     video: LocalVideo,
     strategy: ThumbnailStrategy,
     positionPercent: Int,
+    batterySaver: Boolean,
     onClick: () -> Unit,
     onChanged: () -> Unit
 ) {
@@ -455,11 +464,13 @@ fun VideoListItem(
     val cacheKey = "video:${video.uri}:$strategy:$positionPercent"
     val cached = remember(cacheKey) { com.ghost.video.data.ThumbnailCache.get(cacheKey) }
     var thumbnailBitmap by remember(cacheKey) { mutableStateOf(cached) }
-    var isLoading by remember(cacheKey) { mutableStateOf(cached == null) }
+    var isLoading by remember(cacheKey, batterySaver) { mutableStateOf(cached == null && !batterySaver) }
     var menuExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(cacheKey) {
-        if (cached == null) {
+    LaunchedEffect(cacheKey, batterySaver) {
+        // Battery saver: skip the expensive frame decode entirely and just show
+        // the placeholder icon.
+        if (cached == null && !batterySaver) {
             isLoading = true
             thumbnailBitmap = getVideoThumbnail(context, video.uri, video.duration, strategy, positionPercent)
             isLoading = false
@@ -502,9 +513,8 @@ fun VideoListItem(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.dp
+                            com.ghost.video.ui.components.GhostLoadingIndicator(
+                                size = 40.dp
                             )
                         }
                     } else {

@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.video"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     signingConfigs {
@@ -86,6 +86,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 
     implementation("androidx.datastore:datastore-preferences:1.2.0")
+
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     implementation("com.github.skydoves:cloudy:0.1.2")
 

@@ -1,9 +1,11 @@
 package com.ghost.video.ui.components
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,6 +14,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,18 +28,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * A lightweight, buttery-smooth toggle switch.
+ * A lightweight, buttery-smooth toggle switch with an icon inside the thumb:
+ *  - ON  → filled track, thumb slides right, shows a check (✓)
+ *  - OFF → outlined track, thumb sits left, shows a cross (✕)
  *
  * Performance notes:
- *  - Uses only [animateDpAsState] (thumb offset) + [animateColorAsState] (track /
- *    thumb tint). Both are cheap, single-value spring animations — no per-frame
- *    manual physics loops, no recomposition storms.
- *  - A single low-stiffness spring gives a natural, non-janky glide with a tiny
- *    bounce that feels premium without dropping frames.
+ *  - Only cheap single-value animations: [animateDpAsState] for the thumb offset
+ *    and [animateColorAsState] for the track/thumb tint. No per-frame physics
+ *    loops, no drag gestures, no recomposition storms.
+ *  - The icon swap uses a light [Crossfade]; nothing heavy is drawn.
  */
 @Composable
 fun SmoothSwitch(
@@ -42,13 +48,14 @@ fun SmoothSwitch(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val trackWidth = 52.dp
-    val trackHeight = 30.dp
-    val thumbSize = 22.dp
+    val trackWidth = 62.dp
+    val trackHeight = 36.dp
+    val thumbSize = 28.dp
     val padding = 4.dp
 
     val cs = MaterialTheme.colorScheme
 
+    // One cheap spring for the slide.
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) trackWidth - thumbSize - padding else padding,
         animationSpec = spring(
@@ -58,30 +65,46 @@ fun SmoothSwitch(
         label = "thumbOffset"
     )
 
+    val colorSpec = tween<Color>(durationMillis = 220)
+
     val trackColor by animateColorAsState(
         targetValue = when {
             !enabled -> cs.onSurface.copy(alpha = 0.12f)
             checked -> cs.primary
-            else -> cs.surfaceVariant
+            else -> Color.Transparent
         },
-        animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = colorSpec,
         label = "trackColor"
+    )
+
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> cs.onSurface.copy(alpha = 0.20f)
+            checked -> cs.primary
+            else -> cs.onSurfaceVariant.copy(alpha = 0.65f)
+        },
+        animationSpec = colorSpec,
+        label = "borderColor"
     )
 
     val thumbColor by animateColorAsState(
         targetValue = when {
-            !enabled -> cs.onSurface.copy(alpha = 0.35f)
+            !enabled -> cs.onSurface.copy(alpha = 0.30f)
             checked -> cs.onPrimary
-            else -> cs.outline
+            else -> cs.onSurfaceVariant.copy(alpha = 0.75f)
         },
-        animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = colorSpec,
         label = "thumbColor"
     )
 
-    val borderColor by animateColorAsState(
-        targetValue = if (checked || !enabled) Color.Transparent else cs.outline.copy(alpha = 0.5f),
-        animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow),
-        label = "borderColor"
+    val iconColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> cs.surface
+            checked -> cs.primary
+            else -> cs.surface
+        },
+        animationSpec = colorSpec,
+        label = "iconColor"
     )
 
     val interaction = remember { MutableInteractionSource() }
@@ -91,7 +114,7 @@ fun SmoothSwitch(
             .size(width = trackWidth, height = trackHeight)
             .clip(CircleShape)
             .background(trackColor, CircleShape)
-            .border(1.5.dp, borderColor, CircleShape)
+            .border(2.dp, borderColor, CircleShape)
             .toggleable(
                 value = checked,
                 enabled = enabled,
@@ -108,7 +131,17 @@ fun SmoothSwitch(
                 .size(thumbSize)
                 .shadow(2.dp, CircleShape)
                 .clip(CircleShape)
-                .background(thumbColor, CircleShape)
-        )
+                .background(thumbColor, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Crossfade(targetState = checked, animationSpec = tween(180), label = "thumbIcon") { isOn ->
+                Icon(
+                    imageVector = if (isOn) Icons.Rounded.Check else Icons.Rounded.Close,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
     }
 }

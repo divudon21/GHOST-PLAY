@@ -93,6 +93,9 @@ class SettingsRepository(private val context: Context) {
     private val GLASS_MINI_PLAYER_KEY = booleanPreferencesKey("glass_mini_player_enabled")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
     private val CUSTOM_COLOR_KEY = intPreferencesKey("custom_color_value")
+    private val BATTERY_SAVER_KEY = booleanPreferencesKey("battery_saver")
+    private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
+    private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
 
     val themePreference: Flow<ThemePreference> = context.dataStore.data
         .map { preferences ->
@@ -236,6 +239,15 @@ class SettingsRepository(private val context: Context) {
 
     val customColorValue: Flow<Int> = context.dataStore.data
         .map { it[CUSTOM_COLOR_KEY] ?: android.graphics.Color.parseColor("#6750A4") }
+
+    val batterySaver: Flow<Boolean> = context.dataStore.data
+        .map { it[BATTERY_SAVER_KEY] ?: false }
+
+    val updateNotifications: Flow<Boolean> = context.dataStore.data
+        .map { it[UPDATE_NOTIFICATIONS_KEY] ?: false }
+
+    val lastSeenRelease: Flow<String> = context.dataStore.data
+        .map { it[LAST_SEEN_RELEASE_KEY] ?: "" }
 
     suspend fun setThemePreference(preference: ThemePreference) {
         context.dataStore.edit { preferences ->
@@ -397,6 +409,18 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setCustomColorValue(color: Int) {
         context.dataStore.edit { it[CUSTOM_COLOR_KEY] = color }
+    }
+
+    suspend fun setBatterySaver(enabled: Boolean) {
+        context.dataStore.edit { it[BATTERY_SAVER_KEY] = enabled }
+    }
+
+    suspend fun setUpdateNotifications(enabled: Boolean) {
+        context.dataStore.edit { it[UPDATE_NOTIFICATIONS_KEY] = enabled }
+    }
+
+    suspend fun setLastSeenRelease(tag: String) {
+        context.dataStore.edit { it[LAST_SEEN_RELEASE_KEY] = tag }
     }
 
     suspend fun resetAllSettings() {
