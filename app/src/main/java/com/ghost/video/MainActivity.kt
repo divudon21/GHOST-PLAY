@@ -121,32 +121,34 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-// Animation durations tuned for quick, native-feeling navigation.
-private const val ANIM_DURATION = 220
+// Settings pages use a restrained shared-axis transition: gentle enough for a
+// smooth return to the settings list without a noticeable jump or heavy motion.
+private const val ANIM_DURATION = 260
 private const val MINI_PLAYER_IN = 260
 private const val MINI_PLAYER_OUT = 200
 
 private fun navTween(): FiniteAnimationSpec<IntOffset> = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
 private fun alphaTween() = tween<Float>(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
 
-// Shared-axis transitions: shorter travel keeps settings pages feeling smooth even on low-end devices.
+// Small shared-axis travel prevents the settings list and child pages from
+// visually pulling against each other when the user presses Back.
 private val TAB_SLIDE_IN_RIGHT = slideInHorizontally(
-    initialOffsetX = { it / 4 },
+    initialOffsetX = { it / 8 },
     animationSpec = navTween()
 ) + fadeIn(animationSpec = alphaTween())
 
 private val TAB_SLIDE_OUT_LEFT = slideOutHorizontally(
-    targetOffsetX = { -it / 6 },
+    targetOffsetX = { -it / 10 },
     animationSpec = navTween()
 ) + fadeOut(animationSpec = alphaTween())
 
 private val TAB_SLIDE_IN_LEFT = slideInHorizontally(
-    initialOffsetX = { -it / 4 },
+    initialOffsetX = { -it / 8 },
     animationSpec = navTween()
 ) + fadeIn(animationSpec = alphaTween())
 
 private val TAB_SLIDE_OUT_RIGHT = slideOutHorizontally(
-    targetOffsetX = { it / 6 },
+    targetOffsetX = { it / 10 },
     animationSpec = navTween()
 ) + fadeOut(animationSpec = alphaTween())
 
@@ -602,9 +604,11 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
     val currentIndex = routes.indexOf(currentRoute).coerceAtLeast(0)
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val trackBg = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f)
-    val trackBorder = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f)
-    val thumbBg = if (isDark) Color(0xFF3A3A3E) else Color(0xFFFFFFFF)
+    // Keep the primary Home / Audio / Settings capsule visually light so the
+    // selected segment is the focus, not the container itself.
+    val trackBg = if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.035f)
+    val trackBorder = if (isDark) Color.White.copy(alpha = 0.075f) else Color.Black.copy(alpha = 0.06f)
+    val thumbBg = if (isDark) Color(0xFF35353A) else Color(0xFFFFFFFF)
     val activeColor = if (isDark) Color.White else Color(0xFF111111)
     val inactiveColor = if (isDark) Color.White.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.38f)
 
@@ -615,8 +619,8 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
         }
     }
 
-    val trackHeight = 58.dp
-    val pad = 6.dp
+    val trackHeight = 56.dp
+    val pad = 5.dp
 
     Box(
         modifier = Modifier
@@ -633,10 +637,11 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
                 .padding(pad)
         ) {
             val segWidth = maxWidth / routes.size
-            // Single cheap tween — no physics loop, drag, haptic or squash/stretch.
+            // A single low-cost slide, tuned to feel calm like Telegram's bottom
+            // navigation while avoiding springs or layout work that causes jitter.
             val thumbOffset by animateDpAsState(
                 targetValue = segWidth * currentIndex,
-                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
                 label = "bottomNavThumb"
             )
 
@@ -645,7 +650,7 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
                     .offset(x = thumbOffset)
                     .width(segWidth)
                     .fillMaxHeight()
-                    .shadow(2.dp, CircleShape)
+                    .shadow(1.dp, CircleShape)
                     .clip(CircleShape)
                     .background(thumbBg)
             )
@@ -677,7 +682,7 @@ private fun RowScope.BottomNavSegment(
 ) {
     val tint by animateColorAsState(
         targetValue = if (isActive) activeColor else inactiveColor,
-        animationSpec = tween(200),
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
         label = "bottomNavTint"
     )
 

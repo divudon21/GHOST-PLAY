@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -65,6 +66,7 @@ import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
 import com.ghost.video.ui.theme.paletteScheme
 import com.ghost.video.data.DialogThemePreference
+import com.ghost.video.data.LoadingIndicatorStyle
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.data.ViewLayout
 import com.ghost.video.viewmodel.SettingsViewModel
@@ -80,6 +82,7 @@ fun AppearanceSettingsScreen(
     val currentLayout by viewModel.viewLayout.collectAsState()
     val currentDialogTheme by viewModel.dialogThemePreference.collectAsState()
     val highContrastDark by viewModel.highContrastDark.collectAsState()
+    val loadingIndicatorStyle by viewModel.loadingIndicatorStyle.collectAsState()
     val systemInDark = isSystemInDarkTheme()
     var showPalettePicker by remember { mutableStateOf(false) }
     var showLayoutPicker by remember { mutableStateOf(false) }
@@ -113,9 +116,15 @@ fun AppearanceSettingsScreen(
         ),
         ViewLayoutOption(
             title = "Compact",
-            subtitle = "",
+            subtitle = "Fast 3-column browsing",
             icon = Icons.Default.Apps,
             layout = ViewLayout.COMPACT_GRID
+        ),
+        ViewLayoutOption(
+            title = "Cinema",
+            subtitle = "Featured video first",
+            icon = Icons.Default.ViewAgenda,
+            layout = ViewLayout.CINEMA
         )
     )
 
@@ -180,6 +189,14 @@ fun AppearanceSettingsScreen(
                     enabled = darkActive,
                     checked = highContrastDark,
                     onCheckedChange = { viewModel.setHighContrastDark(it) }
+                )
+            }
+
+            // Loading indicator — Ghost stays the default; Material circular is optional.
+            item {
+                LoadingIndicatorSwitcherCard(
+                    currentStyle = loadingIndicatorStyle,
+                    onStyleSelected = viewModel::setLoadingIndicatorStyle
                 )
             }
 
@@ -462,7 +479,7 @@ fun appPalettes(): List<PaletteOption> {
         return PaletteOption(name, desc, p, s.primary, s.secondary, s.tertiary)
     }
     return listOf(
-        option("Monoserif", "Graphite neutral + warm accent", AppPalette.MONOSERIF),
+        option("Monochrome", "Pure black · white · neutral grey", AppPalette.MONOCHROME),
         option("Aurora", "Indigo · violet · teal", AppPalette.AURORA),
         option("Sunset", "Coral · amber · rose", AppPalette.SUNSET),
         option("Oceanic", "Deep blue · cyan · sky", AppPalette.OCEANIC),
@@ -701,18 +718,19 @@ fun ViewLayoutPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("View Layout") },
         text = {
-            // Professional, clean selector — each layout shown as an equal-width
-            // tile with a mini preview of how items will look. No extra info text.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+            // Two columns keep all four layout choices readable and easy to tap.
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.heightIn(max = 350.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                options.forEach { option ->
+                items(options) { option ->
                     ViewLayoutTile(
                         option = option,
                         isSelected = selectedLayout == option.layout,
                         onClick = { onViewLayoutSelected(option.layout) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -825,19 +843,39 @@ fun LayoutPreview(layout: ViewLayout, accent: Color) {
                 }
             }
             ViewLayout.COMPACT_GRID -> {
+                // Intentional compact mosaic: clean tiles with enough breathing
+                // room to read at a glance, rather than a cramped dense grid.
                 Column(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    repeat(3) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().weight(1f),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            block(Modifier.weight(1f).fillMaxHeight())
-                            block(Modifier.weight(1f).fillMaxHeight())
-                            block(Modifier.weight(1f).fillMaxHeight())
-                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(1.15f),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        block(Modifier.weight(1.35f).fillMaxHeight())
+                        block(Modifier.weight(1f).fillMaxHeight())
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(0.85f),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        repeat(3) { block(Modifier.weight(1f).fillMaxHeight()) }
+                    }
+                }
+            }
+            ViewLayout.CINEMA -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    block(Modifier.fillMaxWidth().weight(1.35f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(0.65f),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        block(Modifier.weight(1f).fillMaxHeight())
+                        block(Modifier.weight(1f).fillMaxHeight())
                     }
                 }
             }
@@ -888,6 +926,24 @@ fun ThemeModeSwitcherCard(
         options = options,
         selectedIndex = currentIndex,
         onSelected = { onThemeSelected(themes[it]) }
+    )
+}
+
+@Composable
+fun LoadingIndicatorSwitcherCard(
+    currentStyle: LoadingIndicatorStyle,
+    onStyleSelected: (LoadingIndicatorStyle) -> Unit
+) {
+    val styles = listOf(LoadingIndicatorStyle.GHOST, LoadingIndicatorStyle.MATERIAL_CIRCULAR)
+    CapsuleSwitcherCard(
+        title = "Loading Indicator",
+        titleIcon = Icons.Default.Refresh,
+        options = listOf(
+            CapsuleSwitcherOption("Ghost", Icons.Default.Refresh),
+            CapsuleSwitcherOption("Circular", Icons.Default.Refresh)
+        ),
+        selectedIndex = styles.indexOf(currentStyle).coerceAtLeast(0),
+        onSelected = { onStyleSelected(styles[it]) }
     )
 }
 

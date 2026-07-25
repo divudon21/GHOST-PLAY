@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,6 +59,8 @@ import com.ghost.video.R
 import com.ghost.video.data.SettingsRepository
 import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ViewLayout
+import com.ghost.video.data.VideoThumbnailPipeline
+import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.viewmodel.SettingsViewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -98,6 +101,7 @@ fun HomeScreen(
     // Battery saver skips thumbnail decoding (the most power-hungry work on this
     // screen) and shows a lightweight placeholder instead.
     val batterySaver by settingsViewModel.batterySaver.collectAsState()
+    val loadingIndicatorStyle by settingsViewModel.loadingIndicatorStyle.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -191,6 +195,7 @@ fun HomeScreen(
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
                                 batterySaver = batterySaver,
+                                loadingIndicatorStyle = loadingIndicatorStyle,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
                             )
@@ -209,6 +214,7 @@ fun HomeScreen(
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
                                 batterySaver = batterySaver,
+                                loadingIndicatorStyle = loadingIndicatorStyle,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
                             )
@@ -216,10 +222,12 @@ fun HomeScreen(
                     }
                 }
                 ViewLayout.COMPACT_GRID -> {
+                    // Compact is a clean thumbnail-first mosaic: titles sit on the
+                    // artwork, avoiding cramped metadata below each tiny card.
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(localVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
@@ -227,6 +235,27 @@ fun HomeScreen(
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
                                 batterySaver = batterySaver,
+                                loadingIndicatorStyle = loadingIndicatorStyle,
+                                compact = true,
+                                onClick = { onPlayUrl(video.uri) },
+                                onChanged = reload
+                            )
+                        }
+                    }
+                }
+                ViewLayout.CINEMA -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(localVideos, key = { it.uri }) { video ->
+                            VideoThumbnailCard(
+                                video = video,
+                                strategy = thumbnailStrategy,
+                                positionPercent = thumbnailPositionPercent,
+                                batterySaver = batterySaver,
+                                loadingIndicatorStyle = loadingIndicatorStyle,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
                             )
@@ -244,6 +273,8 @@ fun VideoThumbnailCard(
     strategy: ThumbnailStrategy,
     positionPercent: Int,
     batterySaver: Boolean,
+    loadingIndicatorStyle: com.ghost.video.data.LoadingIndicatorStyle,
+    compact: Boolean = false,
     onClick: () -> Unit,
     onChanged: () -> Unit
 ) {
@@ -257,12 +288,22 @@ fun VideoThumbnailCard(
     var menuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(cacheKey, batterySaver) {
-        // Battery saver: skip the expensive frame decode entirely and just show
-        // the placeholder icon.
+        // The bounded pipeline starts with currently composed (visible) cards,
+        // delivers a quick preview first, then crossfades to the final frame.
         if (cached == null && !batterySaver) {
             isLoading = true
-            thumbnailBitmap = getVideoThumbnail(context, video.uri, video.duration, strategy, positionPercent)
-            isLoading = false
+            VideoThumbnailPipeline.load(
+                context = context,
+                uri = video.uri,
+                durationMs = video.duration,
+                strategy = strategy,
+                positionPercent = positionPercent,
+                onPreview = { thumbnailBitmap = it },
+                onFinal = {
+                    thumbnailBitmap = it
+                    isLoading = false
+                }
+            )
         }
     }
 
@@ -286,18 +327,27 @@ fun VideoThumbnailCard(
                         .background(Color(0xFF0E0E10))
                 ) {
                     if (thumbnailBitmap != null) {
-                        Image(
-                            bitmap = thumbnailBitmap!!.asImageBitmap(),
-                            contentDescription = "Video Thumbnail",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Crossfade(
+                            targetState = thumbnailBitmap,
+                            animationSpec = tween(durationMillis = 180),
+                            label = "videoThumbnail"
+                        ) { bitmap ->
+                            bitmap?.let {
+                                Image(
+                                    bitmap = it.asImageBitmap(),
+                                    contentDescription = "Video Thumbnail",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                     } else if (isLoading) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            com.ghost.video.ui.components.GhostLoadingIndicator(
+                            AppLoadingIndicator(
+                                style = loadingIndicatorStyle,
                                 size = 40.dp
                             )
                         }
@@ -321,9 +371,24 @@ fun VideoThumbnailCard(
                             modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
                         )
                     }
+                    if (compact) {
+                        Text(
+                            text = displayName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(Color.Black.copy(alpha = 0.55f))
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
                 }
 
-                Row(
+                if (!compact) Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
@@ -457,6 +522,7 @@ fun VideoListItem(
     strategy: ThumbnailStrategy,
     positionPercent: Int,
     batterySaver: Boolean,
+    loadingIndicatorStyle: com.ghost.video.data.LoadingIndicatorStyle,
     onClick: () -> Unit,
     onChanged: () -> Unit
 ) {
@@ -468,12 +534,22 @@ fun VideoListItem(
     var menuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(cacheKey, batterySaver) {
-        // Battery saver: skip the expensive frame decode entirely and just show
-        // the placeholder icon.
+        // The bounded pipeline starts with currently composed (visible) cards,
+        // delivers a quick preview first, then crossfades to the final frame.
         if (cached == null && !batterySaver) {
             isLoading = true
-            thumbnailBitmap = getVideoThumbnail(context, video.uri, video.duration, strategy, positionPercent)
-            isLoading = false
+            VideoThumbnailPipeline.load(
+                context = context,
+                uri = video.uri,
+                durationMs = video.duration,
+                strategy = strategy,
+                positionPercent = positionPercent,
+                onPreview = { thumbnailBitmap = it },
+                onFinal = {
+                    thumbnailBitmap = it
+                    isLoading = false
+                }
+            )
         }
     }
 
@@ -502,18 +578,27 @@ fun VideoListItem(
                         .background(Color(0xFF0E0E10))
                 ) {
                     if (thumbnailBitmap != null) {
-                        Image(
-                            bitmap = thumbnailBitmap!!.asImageBitmap(),
-                            contentDescription = "Video Thumbnail",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Crossfade(
+                            targetState = thumbnailBitmap,
+                            animationSpec = tween(durationMillis = 180),
+                            label = "videoThumbnail"
+                        ) { bitmap ->
+                            bitmap?.let {
+                                Image(
+                                    bitmap = it.asImageBitmap(),
+                                    contentDescription = "Video Thumbnail",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                     } else if (isLoading) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            com.ghost.video.ui.components.GhostLoadingIndicator(
+                            AppLoadingIndicator(
+                                style = loadingIndicatorStyle,
                                 size = 40.dp
                             )
                         }

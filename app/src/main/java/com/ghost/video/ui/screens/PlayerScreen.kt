@@ -81,6 +81,7 @@ import com.ghost.video.data.SettingsRepository
 import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
+import com.ghost.video.ui.components.AppLoadingIndicator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -101,6 +102,10 @@ fun PlayerScreen(url: String) {
     
     // PlayerView reference for controlling visibility
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+
+    // Mirrors Media3 buffering so the same Ghost loader used across the app is
+    // shown directly over the central play/pause control while media is loading.
+    var isBuffering by remember { mutableStateOf(true) }
     
     // Dialog states
     var showQualityDialog by remember { mutableStateOf(false) }
@@ -124,8 +129,11 @@ fun PlayerScreen(url: String) {
     val subtitleBackground by settingsRepository.subtitleBackground.collectAsState(initial = false)
     val subtitleEmbeddedStyles by settingsRepository.subtitleEmbeddedStyles.collectAsState(initial = true)
     val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
-    val appPalette by settingsRepository.appPalette.collectAsState(initial = com.ghost.video.data.AppPalette.MONOSERIF)
+    val appPalette by settingsRepository.appPalette.collectAsState(initial = com.ghost.video.data.AppPalette.MONOCHROME)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
+    val loadingIndicatorStyle by settingsRepository.loadingIndicatorStyle.collectAsState(
+        initial = com.ghost.video.data.LoadingIndicatorStyle.GHOST
+    )
 
     // Immersive Mode
     DisposableEffect(Unit) {
@@ -378,7 +386,20 @@ fun PlayerScreen(url: String) {
     }
     
     DisposableEffect(exoPlayer) {
+        val bufferingListener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = playbackState == Player.STATE_BUFFERING
+            }
+
+            override fun onIsLoadingChanged(isLoading: Boolean) {
+                isBuffering = isLoading || exoPlayer.playbackState == Player.STATE_BUFFERING
+            }
+        }
+        exoPlayer.addListener(bufferingListener)
+        isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING || exoPlayer.isLoading
+
         onDispose {
+            exoPlayer.removeListener(bufferingListener)
             if (!com.ghost.video.SharedPlayer.isFloatingMode) {
                 coroutineScope.launch {
                     settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
@@ -721,6 +742,22 @@ fun PlayerScreen(url: String) {
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Keep the selected app loading indicator centered at the player controls
+        // while Media3 is buffering. Ghost remains the default style.
+        AnimatedVisibility(
+            visible = isBuffering && !isLocked,
+            enter = fadeIn(animationSpec = tween(160)),
+            exit = fadeOut(animationSpec = tween(160)),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            AppLoadingIndicator(
+                style = loadingIndicatorStyle,
+                size = 64.dp,
+                shapeColor = Color.White,
+                containerColor = Color.Black.copy(alpha = 0.56f)
+            )
+        }
         
         // Unlock button overlay when locked
         if (isLocked && showUnlockButton) {

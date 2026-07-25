@@ -36,6 +36,7 @@ import com.ghost.video.R
 import com.ghost.video.data.ReleaseInfo
 import com.ghost.video.data.UpdateChecker
 import com.ghost.video.data.isNewer
+import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.viewmodel.SettingsViewModel
 
 private const val CURRENT_VERSION = "1.0"
@@ -53,6 +54,7 @@ fun AppUpdateScreen(
 ) {
     val context = LocalContext.current
     val updateNotifications by viewModel.updateNotifications.collectAsState()
+    val loadingIndicatorStyle by viewModel.loadingIndicatorStyle.collectAsState()
 
     var state by remember { mutableStateOf(CheckState.CHECKING) }
     var release by remember { mutableStateOf<ReleaseInfo?>(null) }
@@ -147,7 +149,8 @@ fun AppUpdateScreen(
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                             }
                         }
-                    }
+                    },
+                    loadingIndicatorStyle = loadingIndicatorStyle
                 )
             }
 
@@ -306,7 +309,8 @@ private fun StatusCard(
     state: CheckState,
     release: ReleaseInfo?,
     onCheckAgain: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    loadingIndicatorStyle: com.ghost.video.data.LoadingIndicatorStyle
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -322,7 +326,7 @@ private fun StatusCard(
         ) {
             when (state) {
                 CheckState.CHECKING -> {
-                    com.ghost.video.ui.components.GhostLoadingIndicator(size = 56.dp)
+                    AppLoadingIndicator(style = loadingIndicatorStyle, size = 56.dp)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "Checking for updates…",

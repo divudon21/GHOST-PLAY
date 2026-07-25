@@ -12,6 +12,7 @@ import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.DialogThemePreference
+import com.ghost.video.data.LoadingIndicatorStyle
 import com.ghost.video.data.ViewLayout
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +40,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = AppPalette.MONOSERIF
+            initialValue = AppPalette.MONOCHROME
         )
 
     val thumbnailStrategy: StateFlow<ThumbnailStrategy> = repository.thumbnailStrategy
@@ -294,6 +295,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
+    val loadingIndicatorStyle: StateFlow<LoadingIndicatorStyle> = repository.loadingIndicatorStyle
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = LoadingIndicatorStyle.GHOST
+        )
+
     fun setTheme(theme: ThemePreference) {
         viewModelScope.launch {
             repository.setThemePreference(theme)
@@ -460,6 +468,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setLastSeenRelease(tag: String) {
         viewModelScope.launch { repository.setLastSeenRelease(tag) }
+    }
+
+    fun setLoadingIndicatorStyle(style: LoadingIndicatorStyle) {
+        viewModelScope.launch { repository.setLoadingIndicatorStyle(style) }
     }
 
     /**

@@ -27,7 +27,7 @@ enum class AppColorPreference {
  * combination (primary + secondary + tertiary), not a single static colour.
  */
 enum class AppPalette {
-    MONOSERIF, AURORA, SUNSET, OCEANIC, VERDANT,
+    MONOCHROME, AURORA, SUNSET, OCEANIC, VERDANT,
     MIDNIGHT, ROSEGOLD, EMERALD, LAVENDER, EMBER
 }
 
@@ -36,7 +36,7 @@ enum class ThumbnailStrategy {
 }
 
 enum class ViewLayout {
-    LIST, GRID, COMPACT_GRID
+    LIST, GRID, COMPACT_GRID, CINEMA
 }
 
 enum class DecoderPriority {
@@ -53,6 +53,11 @@ enum class OrientationPreference {
 
 enum class DialogThemePreference {
     FOLLOW_SYSTEM, DARK, LIGHT, CUSTOM
+}
+
+/** Default Ghost loader is preserved; Material circular is an optional UI style. */
+enum class LoadingIndicatorStyle {
+    GHOST, MATERIAL_CIRCULAR
 }
 
 class SettingsRepository(private val context: Context) {
@@ -96,6 +101,7 @@ class SettingsRepository(private val context: Context) {
     private val BATTERY_SAVER_KEY = booleanPreferencesKey("battery_saver")
     private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
     private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
+    private val LOADING_INDICATOR_STYLE_KEY = intPreferencesKey("loading_indicator_style")
 
     val themePreference: Flow<ThemePreference> = context.dataStore.data
         .map { preferences ->
@@ -111,8 +117,8 @@ class SettingsRepository(private val context: Context) {
 
     val appPalette: Flow<AppPalette> = context.dataStore.data
         .map { preferences ->
-            val value = preferences[PALETTE_KEY] ?: AppPalette.MONOSERIF.ordinal
-            AppPalette.values().getOrElse(value) { AppPalette.MONOSERIF }
+            val value = preferences[PALETTE_KEY] ?: AppPalette.MONOCHROME.ordinal
+            AppPalette.values().getOrElse(value) { AppPalette.MONOCHROME }
         }
 
     val thumbnailStrategy: Flow<ThumbnailStrategy> = context.dataStore.data
@@ -248,6 +254,12 @@ class SettingsRepository(private val context: Context) {
 
     val lastSeenRelease: Flow<String> = context.dataStore.data
         .map { it[LAST_SEEN_RELEASE_KEY] ?: "" }
+
+    val loadingIndicatorStyle: Flow<LoadingIndicatorStyle> = context.dataStore.data
+        .map { preferences ->
+            val value = preferences[LOADING_INDICATOR_STYLE_KEY] ?: LoadingIndicatorStyle.GHOST.ordinal
+            LoadingIndicatorStyle.values().getOrElse(value) { LoadingIndicatorStyle.GHOST }
+        }
 
     suspend fun setThemePreference(preference: ThemePreference) {
         context.dataStore.edit { preferences ->
@@ -421,6 +433,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLastSeenRelease(tag: String) {
         context.dataStore.edit { it[LAST_SEEN_RELEASE_KEY] = tag }
+    }
+
+    suspend fun setLoadingIndicatorStyle(style: LoadingIndicatorStyle) {
+        context.dataStore.edit { it[LOADING_INDICATOR_STYLE_KEY] = style.ordinal }
     }
 
     suspend fun resetAllSettings() {

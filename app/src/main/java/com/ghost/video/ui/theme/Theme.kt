@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
@@ -322,30 +323,30 @@ private val IndigoLightColorScheme = lightColorScheme(
 //  (primary + secondary + tertiary), not a single static colour.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── 1. Monoserif — refined neutral / graphite with warm accents ──
-private val MonoserifDark = darkColorScheme(
-    primary = Color(0xFFE3E2E6), onPrimary = Color(0xFF2C2C30),
-    primaryContainer = Color(0xFF48474C), onPrimaryContainer = Color(0xFFF3F1F5),
-    secondary = Color(0xFFC8C5CD), onSecondary = Color(0xFF303034),
-    secondaryContainer = Color(0xFF46464B), onSecondaryContainer = Color(0xFFE5E1E9),
-    tertiary = Color(0xFFE6BE9B), onTertiary = Color(0xFF432C12),
-    tertiaryContainer = Color(0xFF5D4225), onTertiaryContainer = Color(0xFFFFDCBE),
-    background = Color(0xFF131316), onBackground = Color(0xFFE5E2E6),
-    surface = Color(0xFF131316), onSurface = Color(0xFFE5E2E6),
-    surfaceVariant = Color(0xFF48474C), onSurfaceVariant = Color(0xFFC9C6CE),
-    outline = Color(0xFF938F99)
+// ── 1. Monochrome — pure black, white and neutral grey ──
+private val MonochromeDark = darkColorScheme(
+    primary = Color(0xFFF1F1F1), onPrimary = Color(0xFF1A1A1A),
+    primaryContainer = Color(0xFF3F3F3F), onPrimaryContainer = Color(0xFFF1F1F1),
+    secondary = Color(0xFFD4D4D4), onSecondary = Color(0xFF292929),
+    secondaryContainer = Color(0xFF484848), onSecondaryContainer = Color(0xFFE7E7E7),
+    tertiary = Color(0xFFBDBDBD), onTertiary = Color(0xFF242424),
+    tertiaryContainer = Color(0xFF555555), onTertiaryContainer = Color(0xFFE8E8E8),
+    background = Color(0xFF111111), onBackground = Color(0xFFEDEDED),
+    surface = Color(0xFF111111), onSurface = Color(0xFFEDEDED),
+    surfaceVariant = Color(0xFF454545), onSurfaceVariant = Color(0xFFC9C9C9),
+    outline = Color(0xFF919191)
 )
-private val MonoserifLight = lightColorScheme(
-    primary = Color(0xFF4A4A50), onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE3E1E9), onPrimaryContainer = Color(0xFF181820),
-    secondary = Color(0xFF5D5D63), onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE4E1E9), onSecondaryContainer = Color(0xFF1A1B20),
-    tertiary = Color(0xFF855318), onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFFFDCBE), onTertiaryContainer = Color(0xFF2B1700),
-    background = Color(0xFFFDFBFF), onBackground = Color(0xFF1B1B1F),
-    surface = Color(0xFFFDFBFF), onSurface = Color(0xFF1B1B1F),
-    surfaceVariant = Color(0xFFE4E1EC), onSurfaceVariant = Color(0xFF47464F),
-    outline = Color(0xFF787680)
+private val MonochromeLight = lightColorScheme(
+    primary = Color(0xFF292929), onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFE3E3E3), onPrimaryContainer = Color(0xFF181818),
+    secondary = Color(0xFF4B4B4B), onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFE6E6E6), onSecondaryContainer = Color(0xFF1C1C1C),
+    tertiary = Color(0xFF686868), onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFDADADA), onTertiaryContainer = Color(0xFF202020),
+    background = Color(0xFFFCFCFC), onBackground = Color(0xFF1B1B1B),
+    surface = Color(0xFFFCFCFC), onSurface = Color(0xFF1B1B1B),
+    surfaceVariant = Color(0xFFE5E5E5), onSurfaceVariant = Color(0xFF474747),
+    outline = Color(0xFF777777)
 )
 
 // ── 2. Aurora — indigo / violet with teal-green accents ──
@@ -582,10 +583,16 @@ private val EmberLight = lightColorScheme(
     outline = Color(0xFF857370)
 )
 
-/** Resolve a palette to its light/dark Material 3 [ColorScheme]. */
-fun paletteScheme(palette: AppPalette, isDark: Boolean): androidx.compose.material3.ColorScheme =
-    when (palette) {
-        AppPalette.MONOSERIF -> if (isDark) MonoserifDark else MonoserifLight
+/**
+ * Resolve a palette to its light/dark Material 3 [ColorScheme].
+ *
+ * A restrained accent wash lets the chosen palette remain visible on cards and
+ * backgrounds in both themes. It is deliberately subtle: controls retain clear
+ * contrast and the app never turns into a full-colour surface.
+ */
+fun paletteScheme(palette: AppPalette, isDark: Boolean): androidx.compose.material3.ColorScheme {
+    val base = when (palette) {
+        AppPalette.MONOCHROME -> if (isDark) MonochromeDark else MonochromeLight
         AppPalette.AURORA -> if (isDark) AuroraDark else AuroraLight
         AppPalette.SUNSET -> if (isDark) SunsetDark else SunsetLight
         AppPalette.OCEANIC -> if (isDark) OceanicDark else OceanicLight
@@ -596,6 +603,16 @@ fun paletteScheme(palette: AppPalette, isDark: Boolean): androidx.compose.materi
         AppPalette.LAVENDER -> if (isDark) LavenderDark else LavenderLight
         AppPalette.EMBER -> if (isDark) EmberDark else EmberLight
     }
+    val backgroundWash = base.primaryContainer.copy(alpha = if (isDark) 0.12f else 0.075f)
+        .compositeOver(base.background)
+    val cardWash = base.primaryContainer.copy(alpha = if (isDark) 0.34f else 0.20f)
+        .compositeOver(base.surface)
+    return base.copy(
+        background = backgroundWash,
+        surface = backgroundWash,
+        surfaceVariant = cardWash
+    )
+}
 
 /**
  * Generate a dark ColorScheme from a custom seed color.
@@ -685,7 +702,7 @@ fun getColorScheme(
 @Composable
 fun AgonAppTheme(
     themePreference: ThemePreference = ThemePreference.SYSTEM,
-    palette: AppPalette = AppPalette.MONOSERIF,
+    palette: AppPalette = AppPalette.MONOCHROME,
     highContrastDark: Boolean = false,
     content: @Composable () -> Unit,
 ) {
