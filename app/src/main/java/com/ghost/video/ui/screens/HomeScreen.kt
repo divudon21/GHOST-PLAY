@@ -872,7 +872,10 @@ private fun RenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) { Text("Rename") }
+            TextButton(
+                onClick = { if (text.isNotBlank()) onConfirm(text.trim()) },
+                enabled = text.isNotBlank()
+            ) { Text("Rename") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -883,7 +886,18 @@ private fun RenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: 
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                label = { Text("New name") }
+                label = { Text("New name") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (text.isNotBlank()) onConfirm(text.trim()) }
+                ),
+                trailingIcon = {
+                    if (text.isNotEmpty()) {
+                        IconButton(onClick = { text = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear text")
+                        }
+                    }
+                }
             )
         }
     )
