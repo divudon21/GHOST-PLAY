@@ -30,8 +30,14 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoFile
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +95,7 @@ fun HomeScreen(
     var url by remember { mutableStateOf("") }
     var showUrlInput by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var localVideos by remember { mutableStateOf<List<LocalVideo>>(emptyList()) }
     var hasPermission by remember { mutableStateOf(checkVideoPermission(context)) }
     var refreshKey by remember { mutableStateOf(0) }
@@ -160,12 +167,34 @@ fun HomeScreen(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text("Enter Video URL") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(
+                    onGo = { if (url.isNotEmpty()) onPlayUrl(url) }
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp, bottom = 8.dp),
                 trailingIcon = {
-                    IconButton(onClick = { if (url.isNotEmpty()) onPlayUrl(url) }) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        if (url.isNotEmpty()) {
+                            IconButton(onClick = { url = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                            IconButton(onClick = { onPlayUrl(url) }) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                            }
+                        } else {
+                            IconButton(onClick = {
+                                clipboardManager.getText()?.text?.let { url = it }
+                            }) {
+                                Icon(Icons.Default.ContentPaste, contentDescription = "Paste from Clipboard")
+                            }
+                        }
                     }
                 }
             )
