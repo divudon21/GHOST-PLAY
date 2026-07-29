@@ -18,7 +18,7 @@ Ghost-Play is a modern Android app built with <img src="assets/kotlin.svg" alt="
 - Background playback for continued audio use.
 - Optimized for a simple and practical viewing flow.
 
-## Compatibility
+## <img src="assets/accessibility-circle-solid-svgrepo-com.svg" alt="Android" width="30" height="30">Compatibility
 - Minimum: Android 7.0 (API 24)
 - Target: Android 15 (API 36)
 
