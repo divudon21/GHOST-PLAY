@@ -22,13 +22,13 @@ Ghost-Play is a modern Android app built with <img src="assets/kotlin.svg" alt="
 - Minimum: Android 7.0 (API 24)
 - Target: Android 15 (API 36)
 
-## Tech Stack
+## <img src="assets/video.svg" alt="Android" width="23" height="23"> Tech used
 - <img src="assets/kotlin.svg" alt="Kotlin" width="18" height="18"> Kotlin
 - <img src="assets/jetpack-compose.svg" alt="Jetpack Compose" width="18" height="18"> Jetpack Compose
 - <img src="assets/material-design-svgrepo-com.svg" alt="Material Design 3" width="18" height="18"> Material Design 3
 - <img src="assets/exoplayer.svg" alt="ExoPlayer" width="18" height="18"> ExoPlayer
 
-## <img src="assets/git.png" alt="Git" width="18" height="18"> Clone git
+## <img src="assets/git.png" alt="Git" width="23" height="23"> Clone git
 
 ```bash
 git clone https://github.com/divudon21/GHOST-PLAY.git
