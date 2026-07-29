@@ -1,4 +1,4 @@
-# <img src="assets/android.png" alt="Android" width="30" height="30"> Ghost-Play
+# <img src="assets/android.png" alt="Android" width="30" height="30"> Ghost Play
 
 Ghost-Play is a modern Android app built with Kotlin and Jetpack Compose. It focuses on a clean interface and a smooth video playback experience.
 
