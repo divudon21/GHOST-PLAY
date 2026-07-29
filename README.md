@@ -2,7 +2,7 @@
 
 Ghost-Play is a modern Android app built with <img src="assets/kotlin.svg" alt="Kotlin" width="18" height="18"> Kotlin and <img src="assets/jetpack-compose.svg" alt="Jetpack Compose" width="18" height="18"> Jetpack Compose. It focuses on a clean interface and a smooth video playback experience.
 
-## Features
+## <img src="assets/Features.svg" alt="Android" width="23" height="23"> Features
 - Clean and responsive UI.
 - Immersive full-screen video playback.
 - Gesture controls for brightness, volume, and zoom.
