@@ -20,31 +20,36 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.viewmodel.AudioViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class LocalAudio(val id: Long, val name: String, val uri: String, val artist: String?) : Parcelable
 
+private const val AUDIO_PAGE_SIZE = 60
+
 @Composable
 fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var localAudios by remember { mutableStateOf<List<LocalAudio>>(emptyList()) }
     var hasPermission by remember { mutableStateOf(checkAudioPermission(context)) }
+    var isLoadingPage by remember { mutableStateOf(false) }
+    var hasMorePages by remember { mutableStateOf(true) }
+    var nextOffset by remember { mutableIntStateOf(0) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -52,10 +57,31 @@ fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
         hasPermission = isGranted
     }
 
+    fun loadNextPage() {
+        if (!hasPermission || isLoadingPage || !hasMorePages) return
+        isLoadingPage = true
+        val offsetToLoad = nextOffset
+        scope.launch {
+            val page = loadLocalAudiosPage(
+                context = context,
+                limit = AUDIO_PAGE_SIZE,
+                offset = offsetToLoad
+            )
+            localAudios = if (offsetToLoad == 0) page else localAudios + page
+            nextOffset = offsetToLoad + page.size
+            hasMorePages = page.size == AUDIO_PAGE_SIZE
+            viewModel.setPlaylist(localAudios)
+            isLoadingPage = false
+        }
+    }
+
     LaunchedEffect(hasPermission) {
         if (hasPermission) {
-            localAudios = loadLocalAudios(context)
-            viewModel.setPlaylist(localAudios)
+            localAudios = emptyList()
+            nextOffset = 0
+            hasMorePages = true
+            isLoadingPage = false
+            loadNextPage()
         } else {
             val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 Manifest.permission.READ_MEDIA_AUDIO
@@ -69,25 +95,51 @@ fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Local Audio Files", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
-        
-        if (!hasPermission) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Storage permission required to show local audio.")
+
+        when {
+            !hasPermission -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Storage permission required to show local audio.")
+                }
             }
-        } else if (localAudios.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No local audio files found.")
+
+            localAudios.isEmpty() && isLoadingPage -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(localAudios, key = { it.uri }) { audio ->
-                    AudioListItem(
-                        audio = audio,
-                        onClick = { viewModel.playAudio(context, audio) }
-                    )
+
+            localAudios.isEmpty() -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No local audio files found.")
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    items(localAudios, key = { it.uri }) { audio ->
+                        AudioListItem(
+                            audio = audio,
+                            onClick = { viewModel.playAudio(context, audio) }
+                        )
+                    }
+
+                    if (hasMorePages) {
+                        item(key = "audio_load_more") {
+                            LaunchedEffect(localAudios.size) { loadNextPage() }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -103,7 +155,17 @@ fun checkAudioPermission(context: Context): Boolean {
     return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 }
 
-suspend fun loadLocalAudios(context: Context): List<LocalAudio> = withContext(Dispatchers.IO) {
+suspend fun loadLocalAudios(context: Context): List<LocalAudio> = loadLocalAudiosPage(
+    context = context,
+    limit = Int.MAX_VALUE,
+    offset = 0
+)
+
+suspend fun loadLocalAudiosPage(
+    context: Context,
+    limit: Int,
+    offset: Int
+): List<LocalAudio> = withContext(Dispatchers.IO) {
     val audios = mutableListOf<LocalAudio>()
     val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -117,22 +179,41 @@ suspend fun loadLocalAudios(context: Context): List<LocalAudio> = withContext(Di
         MediaStore.Audio.Media.ARTIST
     )
 
-    context.contentResolver.query(
-        collection,
-        projection,
-        "${MediaStore.Audio.Media.IS_MUSIC} != 0",
-        null,
-        "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-    )?.use { cursor ->
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-        val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+    val cursor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.contentResolver.query(
+            collection,
+            projection,
+            android.os.Bundle().apply {
+                putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.Audio.Media.IS_MUSIC} != 0")
+                putStringArray(android.content.ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Audio.Media.DATE_ADDED))
+                putInt(android.content.ContentResolver.QUERY_ARG_SORT_DIRECTION, android.content.ContentResolver.QUERY_SORT_DIRECTION_DESCENDING)
+                putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, limit)
+                putInt(android.content.ContentResolver.QUERY_ARG_OFFSET, offset)
+            },
+            null
+        )
+    } else {
+        val safeLimit = limit.coerceAtLeast(1)
+        val safeOffset = offset.coerceAtLeast(0)
+        context.contentResolver.query(
+            collection,
+            projection,
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0",
+            null,
+            "${MediaStore.Audio.Media.DATE_ADDED} DESC LIMIT $safeLimit OFFSET $safeOffset"
+        )
+    }
 
-        while (cursor.moveToNext()) {
-            val id = cursor.getLong(idColumn)
-            val name = cursor.getString(nameColumn)
-            val artist = cursor.getString(artistColumn)
-            val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+    cursor?.use {
+        val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+        val nameColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+        val artistColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+
+        while (it.moveToNext()) {
+            val id = it.getLong(idColumn)
+            val name = it.getString(nameColumn)
+            val artist = it.getString(artistColumn)
+            val contentUri = ContentUris.withAppendedId(collection, id)
             audios.add(LocalAudio(id, name, contentUri.toString(), artist))
         }
     }

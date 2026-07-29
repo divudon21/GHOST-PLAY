@@ -34,6 +34,8 @@ clean, minimal interface that adapts to your taste.
 ### 🎧 Audio Playback
 - **Full‑screen Now Playing experience** — large album art, track details, and a
   scrubbable seek bar.
+- **Optimised audio library loading** — tracks are loaded progressively to keep large
+  collections smooth and responsive.
 - **Mini player** — a compact control bar that follows you across the app; tap or
   swipe up to expand into the full player.
 - **Background playback** — keep listening with the screen off.

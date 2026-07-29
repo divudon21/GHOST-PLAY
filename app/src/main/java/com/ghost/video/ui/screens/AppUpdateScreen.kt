@@ -32,6 +32,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.BuildConfig
 import com.ghost.video.R
 import com.ghost.video.data.ReleaseInfo
 import com.ghost.video.data.UpdateChecker
@@ -39,8 +40,10 @@ import com.ghost.video.data.isNewer
 import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.viewmodel.SettingsViewModel
 
-private const val CURRENT_VERSION = "2.2"
-private const val VERSION_CODE = 4
+private val CURRENT_VERSION: String
+    get() = BuildConfig.VERSION_NAME
+private val VERSION_CODE: Int
+    get() = BuildConfig.VERSION_CODE
 private const val REPO_AUTHOR = "divudon21"
 private const val REPO_URL = "https://github.com/divudon21/GHOST-PLAY"
 
