@@ -34,6 +34,6 @@ Ghost-Play is a modern Android app built with <img src="assets/kotlin.svg" alt="
 git clone https://github.com/divudon21/GHOST-PLAY.git
 ```
 
-## Note
+## <img src="assets/Notes.svg" alt="Android" width="23" height="23"> Notes
 
 This project is focused on a simple, fast, and user-friendly playback experience.
