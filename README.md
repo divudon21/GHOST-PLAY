@@ -28,7 +28,7 @@ Ghost-Play is a modern Android app built with Kotlin and Jetpack Compose. It foc
 - <img src="assets/material3.svg" alt="Material Design 3" width="18" height="18"> Material Design 3
 - <img src="assets/exoplayer.svg" alt="ExoPlayer" width="18" height="18"> ExoPlayer
 
-## Getting Started
+## <img src="assets/git.png" alt="Git" width="18" height="18"> Getting Started
 
 ```bash
 git clone https://github.com/divudon21/GHOST-PLAY.git
