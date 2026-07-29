@@ -30,8 +30,8 @@ Ghost-Play is a modern Android app built with <img src="assets/kotlin.svg" alt="
 
 ##  Getting Started
 
-<img src="assets/git.png" alt="Git" width="18" height="18"> ```bash
-git clone https://github.com/divudon21/GHOST-PLAY.git
+```bash
+<img src="assets/git.png" alt="Git" width="18" height="18"> git clone https://github.com/divudon21/GHOST-PLAY.git
 ```
 
 ## Note
