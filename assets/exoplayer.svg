@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="exo" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2962FF"/>
+      <stop offset="100%" stop-color="#00C853"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="64" cy="64" r="54" fill="url(#exo)"/>
+
+  <polygon points="52,42 92,64 52,86"
+           fill="#fff"/>
+
+  <rect x="34" y="42" width="8" height="44" rx="4"
+        fill="#fff"/>
+</svg>
