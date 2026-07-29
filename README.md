@@ -11,7 +11,7 @@ Ghost-Play is a modern Android app built with <img src="assets/kotlin.svg" alt="
 - Favorites for quick access.
 - Lightweight and fast performance.
 
-## <img src="assets/video.svg" alt="Android" width="50" height="50"> Video Playback
+## <img src="assets/video.svg" alt="Android" width="25" height="25"> Video Playback
 - Smooth full-screen playback experience.
 - Easy control handling during video viewing.
 - Supports multitasking with PiP mode.
