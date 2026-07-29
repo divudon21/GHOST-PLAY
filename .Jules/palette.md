@@ -1,3 +1,7 @@
 ## 2023-11-20 - [Soft Keyboard & Clipboard UX in Jetpack Compose]
 **Learning:** In text fields of media-centric applications, users often paste links (e.g. video URLs) from the system clipboard or type them out and expect to launch playback instantly using the soft keyboard's confirmation key (like Enter / Go / Done) without being forced to manually click a visual "play" button. Additionally, dynamic trailing icons that swap a "Paste" helper button when empty for a "Clear" + "Play" combination when populated maximize efficiency while maintaining a clean aesthetic.
 **Action:** Always map text fields accepting URLs/actions to proper `ImeAction` and `KeyboardActions` options, and provide dynamic paste/clear helpers inside the field's trailing element with custom `contentDescription` for screen readers.
+
+## 2025-01-26 - [Text Input Fields in Dialogs & Keyboard Accessibility]
+**Learning:** Text input fields inside custom or standard dialogs (like video rename prompts) are frequently neglected for keyboard accessibility, lacking proper IME confirmation handlers or text clearing helpers. This degrades usability for keyboard-only or screen-reader users who must navigate out of the text field to press confirming buttons.
+**Action:** Ensure all text dialog inputs support `ImeAction.Done` bound to the action confirmation callback, and include dynamic clear icons to enable swift input resets.
