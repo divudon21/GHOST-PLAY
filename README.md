@@ -23,15 +23,17 @@ Ghost-Play is a modern Android app built with Kotlin and Jetpack Compose. It foc
 - Target: Android 15 (API 36)
 
 ## Tech Stack
-- Kotlin
+- <img src="assets/kotlin.svg" alt="Kotlin" width="18" height="18"> Kotlin
 - Jetpack Compose
 - Material Design 3
 - ExoPlayer
 
 ## Getting Started
+
 ```bash
 git clone https://github.com/divudon21/GHOST-PLAY.git
 ```
 
 ## Note
+
 This project is focused on a simple, fast, and user-friendly playback experience.
