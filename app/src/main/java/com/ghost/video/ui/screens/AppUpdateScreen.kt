@@ -39,8 +39,8 @@ import com.ghost.video.data.isNewer
 import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.viewmodel.SettingsViewModel
 
-private const val CURRENT_VERSION = "1.0"
-private const val VERSION_CODE = 1
+private const val CURRENT_VERSION = "2.2"
+private const val VERSION_CODE = 4
 private const val REPO_AUTHOR = "divudon21"
 private const val REPO_URL = "https://github.com/divudon21/GHOST-PLAY"
 

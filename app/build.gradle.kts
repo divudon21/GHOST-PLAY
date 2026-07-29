@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.video"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 4
+        versionName = "2.2"
     }
 
     signingConfigs {
@@ -33,6 +33,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
     }
@@ -48,6 +49,13 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    configurations.all {
+        resolutionStrategy.force(
+            "androidx.compose.material3:material3:1.4.0-alpha10",
+            "androidx.compose.material3:material3-android:1.4.0-alpha10"
+        )
     }
 
     // Generate per-ABI APKs (arm64-v8a, armeabi-v7a) plus one universal APK that
@@ -68,6 +76,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.4.0-alpha10")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
 

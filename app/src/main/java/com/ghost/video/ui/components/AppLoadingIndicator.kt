@@ -1,8 +1,8 @@
 package com.ghost.video.ui.components
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -11,30 +11,24 @@ import androidx.compose.ui.unit.dp
 import com.ghost.video.data.LoadingIndicatorStyle
 
 /**
- * The app-wide loader selector. Ghost is intentionally the default and remains
- * the loader used by video buffering; the optional Material circular loader is
- * for library and update-screen loading states only.
+ * App-wide RoundedPolygon loading indicator backed directly by the official
+ * Material 3 Expressive contained loading indicator API.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppLoadingIndicator(
     style: LoadingIndicatorStyle,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
-    shapeColor: Color = MaterialTheme.colorScheme.primary,
-    containerColor: Color = MaterialTheme.colorScheme.primaryContainer
+    shapeColor: Color = Color.Unspecified,
+    containerColor: Color = Color.Unspecified
 ) {
-    when (style) {
-        LoadingIndicatorStyle.GHOST -> GhostLoadingIndicator(
-            modifier = modifier,
-            size = size,
-            shapeColor = shapeColor,
-            containerColor = containerColor
-        )
-        LoadingIndicatorStyle.MATERIAL_CIRCULAR -> CircularProgressIndicator(
-            modifier = modifier.size(size),
-            color = shapeColor,
-            trackColor = containerColor,
-            strokeWidth = 5.dp
-        )
-    }
+    @Suppress("UNUSED_VARIABLE")
+    val ignoredShapeColor = shapeColor
+    @Suppress("UNUSED_VARIABLE")
+    val ignoredContainerColor = containerColor
+
+    ContainedLoadingIndicator(
+        modifier = modifier.size(size)
+    )
 }

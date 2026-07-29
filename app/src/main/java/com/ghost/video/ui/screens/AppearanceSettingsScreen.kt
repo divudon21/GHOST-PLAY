@@ -66,7 +66,6 @@ import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
 import com.ghost.video.ui.theme.paletteScheme
 import com.ghost.video.data.DialogThemePreference
-import com.ghost.video.data.LoadingIndicatorStyle
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.data.ViewLayout
 import com.ghost.video.viewmodel.SettingsViewModel
@@ -192,14 +191,6 @@ fun AppearanceSettingsScreen(
                 )
             }
 
-            // Loading indicator — Ghost stays the default; Material circular is optional.
-            item {
-                LoadingIndicatorSwitcherCard(
-                    currentStyle = loadingIndicatorStyle,
-                    onStyleSelected = viewModel::setLoadingIndicatorStyle
-                )
-            }
-
             // Dialog Theme — native segmented switcher (4 options)
             item {
                 DialogThemeModeSwitcherCard(
@@ -249,7 +240,7 @@ data class CapsuleSwitcherOption(
 //
 //  Rewritten to be solid & performance-friendly:
 //   • No per-frame physics loop (withFrameNanos), no drag gestures, no haptic
-//     vibration, no squash/stretch graphicsLayer — those caused jitter, extra
+//     vibration or squash/stretch effects — those caused jitter, extra
 //     GPU work and the "vibration" feel the user disliked.
 //   • The thumb slides to its target with a single cheap animateDpAsState tween.
 //   • Flat solid colours instead of linearGradient brushes (cheaper to draw).
@@ -926,24 +917,6 @@ fun ThemeModeSwitcherCard(
         options = options,
         selectedIndex = currentIndex,
         onSelected = { onThemeSelected(themes[it]) }
-    )
-}
-
-@Composable
-fun LoadingIndicatorSwitcherCard(
-    currentStyle: LoadingIndicatorStyle,
-    onStyleSelected: (LoadingIndicatorStyle) -> Unit
-) {
-    val styles = listOf(LoadingIndicatorStyle.GHOST, LoadingIndicatorStyle.MATERIAL_CIRCULAR)
-    CapsuleSwitcherCard(
-        title = "Loading Indicator",
-        titleIcon = Icons.Default.Refresh,
-        options = listOf(
-            CapsuleSwitcherOption("Ghost", Icons.Default.Refresh),
-            CapsuleSwitcherOption("Circular", Icons.Default.Refresh)
-        ),
-        selectedIndex = styles.indexOf(currentStyle).coerceAtLeast(0),
-        onSelected = { onStyleSelected(styles[it]) }
     )
 }
 

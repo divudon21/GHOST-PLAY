@@ -103,7 +103,7 @@ fun PlayerScreen(url: String) {
     // PlayerView reference for controlling visibility
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
-    // Mirrors Media3 buffering so the same Ghost loader used across the app is
+    // Mirrors Media3 buffering so the official Material 3 circular loader is
     // shown directly over the central play/pause control while media is loading.
     var isBuffering by remember { mutableStateOf(true) }
     
@@ -132,7 +132,7 @@ fun PlayerScreen(url: String) {
     val appPalette by settingsRepository.appPalette.collectAsState(initial = com.ghost.video.data.AppPalette.MONOCHROME)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
     val loadingIndicatorStyle by settingsRepository.loadingIndicatorStyle.collectAsState(
-        initial = com.ghost.video.data.LoadingIndicatorStyle.GHOST
+        initial = com.ghost.video.data.LoadingIndicatorStyle.ROUNDED_POLYGON
     )
 
     // Immersive Mode
@@ -743,8 +743,8 @@ fun PlayerScreen(url: String) {
             modifier = Modifier.fillMaxSize()
         )
 
-        // Keep the selected app loading indicator centered at the player controls
-        // while Media3 is buffering. Ghost remains the default style.
+        // Keep the official Material 3 RoundedPolygon loading indicator centered
+        // at the player controls while Media3 is buffering.
         AnimatedVisibility(
             visible = isBuffering && !isLocked,
             enter = fadeIn(animationSpec = tween(160)),

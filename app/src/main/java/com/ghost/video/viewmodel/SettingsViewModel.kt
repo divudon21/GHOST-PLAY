@@ -299,7 +299,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = LoadingIndicatorStyle.GHOST
+            initialValue = LoadingIndicatorStyle.ROUNDED_POLYGON
         )
 
     fun setTheme(theme: ThemePreference) {

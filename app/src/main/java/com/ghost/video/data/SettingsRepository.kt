@@ -55,9 +55,9 @@ enum class DialogThemePreference {
     FOLLOW_SYSTEM, DARK, LIGHT, CUSTOM
 }
 
-/** Default Ghost loader is preserved; Material circular is an optional UI style. */
+/** Only the official Material 3 RoundedPolygon loading indicator is supported. */
 enum class LoadingIndicatorStyle {
-    GHOST, MATERIAL_CIRCULAR
+    ROUNDED_POLYGON
 }
 
 class SettingsRepository(private val context: Context) {
@@ -256,10 +256,7 @@ class SettingsRepository(private val context: Context) {
         .map { it[LAST_SEEN_RELEASE_KEY] ?: "" }
 
     val loadingIndicatorStyle: Flow<LoadingIndicatorStyle> = context.dataStore.data
-        .map { preferences ->
-            val value = preferences[LOADING_INDICATOR_STYLE_KEY] ?: LoadingIndicatorStyle.GHOST.ordinal
-            LoadingIndicatorStyle.values().getOrElse(value) { LoadingIndicatorStyle.GHOST }
-        }
+        .map { LoadingIndicatorStyle.ROUNDED_POLYGON }
 
     suspend fun setThemePreference(preference: ThemePreference) {
         context.dataStore.edit { preferences ->
@@ -436,7 +433,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setLoadingIndicatorStyle(style: LoadingIndicatorStyle) {
-        context.dataStore.edit { it[LOADING_INDICATOR_STYLE_KEY] = style.ordinal }
+        context.dataStore.edit { it[LOADING_INDICATOR_STYLE_KEY] = LoadingIndicatorStyle.ROUNDED_POLYGON.ordinal }
     }
 
     suspend fun resetAllSettings() {
