@@ -883,7 +883,25 @@ private fun RenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: 
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                label = { Text("New name") }
+                label = { Text("New name") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        if (text.isNotBlank()) {
+                            onConfirm(text.trim())
+                        }
+                    }
+                ),
+                trailingIcon = {
+                    if (text.isNotEmpty()) {
+                        IconButton(onClick = { text = "" }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear name input"
+                            )
+                        }
+                    }
+                }
             )
         }
     )
