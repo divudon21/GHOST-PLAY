@@ -38,6 +38,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -869,6 +871,12 @@ private fun DetailRow(label: String, value: String) {
 @Composable
 private fun RenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by remember { mutableStateOf(cleanVideoName(currentName)) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -883,7 +891,21 @@ private fun RenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: 
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                label = { Text("New name") }
+                label = { Text("New name") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (text.isNotBlank()) onConfirm(text.trim()) }
+                ),
+                trailingIcon = {
+                    if (text.isNotEmpty()) {
+                        IconButton(onClick = { text = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear input text")
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
             )
         }
     )
