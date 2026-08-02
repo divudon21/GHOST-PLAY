@@ -390,13 +390,9 @@ fun PlayerScreen(url: String) {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
             }
-
-            override fun onIsLoadingChanged(isLoading: Boolean) {
-                isBuffering = isLoading || exoPlayer.playbackState == Player.STATE_BUFFERING
-            }
         }
         exoPlayer.addListener(bufferingListener)
-        isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING || exoPlayer.isLoading
+        isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING
 
         onDispose {
             exoPlayer.removeListener(bufferingListener)
