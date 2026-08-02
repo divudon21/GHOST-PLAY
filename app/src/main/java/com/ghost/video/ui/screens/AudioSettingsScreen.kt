@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,7 +26,6 @@ fun AudioSettingsScreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
     val volumeBoostEnabled by viewModel.volumeBoostEnabled.collectAsState()
-    val glassMiniPlayer by viewModel.glassMiniPlayerEnabled.collectAsState()
 
     Scaffold(
         topBar = {
@@ -51,67 +49,18 @@ fun AudioSettingsScreen(
                 .padding(horizontal = 16.dp)
         ) {
             item {
-                GlassVolumeBoostCard(
+                VolumeBoostCard(
                     checked = volumeBoostEnabled,
                     onCheckedChange = { viewModel.setVolumeBoostEnabled(it) }
                 )
             }
-
-            item {
-                GlassMiniPlayerCard(
-                    checked = glassMiniPlayer,
-                    onCheckedChange = { viewModel.setGlassMiniPlayerEnabled(it) }
-                )
-            }
         }
     }
 
 }
 
 @Composable
-fun GlassMiniPlayerCard(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.BlurOn,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Glass effect mini player",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Frosted glass look for the mini player",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                )
-            }
-            com.ghost.video.ui.components.SmoothSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-    }
-}
-
-@Composable
-fun GlassVolumeBoostCard(
+fun VolumeBoostCard(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {

@@ -3,6 +3,7 @@ package com.ghost.video.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -10,9 +11,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
+import com.ghost.video.R
 import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
+import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.ThemePreference
 import androidx.core.graphics.ColorUtils
 import kotlin.math.max
@@ -699,10 +706,105 @@ fun getColorScheme(
     isDark: Boolean
 ): androidx.compose.material3.ColorScheme = paletteScheme(palette, isDark)
 
+private val DefaultAppTypography = Typography()
+
+// Bundled OFL fonts from the Google Fonts GitHub repository. Using packaged
+// files instead of generic Android family aliases makes every option visibly
+// different and consistent on every supported device.
+private val ManropeFontFamily = FontFamily(
+    Font(R.font.manrope_variable, FontWeight.Normal),
+    Font(R.font.manrope_variable, FontWeight.Medium),
+    Font(R.font.manrope_variable, FontWeight.SemiBold),
+    Font(R.font.manrope_variable, FontWeight.Bold)
+)
+private val NunitoFontFamily = FontFamily(
+    Font(R.font.nunito_variable, FontWeight.Normal),
+    Font(R.font.nunito_variable, FontWeight.Medium),
+    Font(R.font.nunito_variable, FontWeight.SemiBold),
+    Font(R.font.nunito_variable, FontWeight.Bold)
+)
+private val LoraFontFamily = FontFamily(
+    Font(R.font.lora_variable, FontWeight.Normal),
+    Font(R.font.lora_variable, FontWeight.Medium),
+    Font(R.font.lora_variable, FontWeight.SemiBold),
+    Font(R.font.lora_variable, FontWeight.Bold)
+)
+private val JetBrainsMonoFontFamily = FontFamily(
+    Font(R.font.jetbrains_mono_variable, FontWeight.Normal),
+    Font(R.font.jetbrains_mono_variable, FontWeight.Medium),
+    Font(R.font.jetbrains_mono_variable, FontWeight.SemiBold),
+    Font(R.font.jetbrains_mono_variable, FontWeight.Bold)
+)
+private val InterFontFamily = FontFamily(
+    Font(R.font.inter_variable, FontWeight.Normal),
+    Font(R.font.inter_variable, FontWeight.Medium),
+    Font(R.font.inter_variable, FontWeight.SemiBold),
+    Font(R.font.inter_variable, FontWeight.Bold)
+)
+
+private fun typographyWithFamily(fontFamily: FontFamily): Typography {
+    val base = DefaultAppTypography
+    fun TextStyle.withFamily() = copy(fontFamily = fontFamily)
+    return base.copy(
+        displayLarge = base.displayLarge.withFamily(),
+        displayMedium = base.displayMedium.withFamily(),
+        displaySmall = base.displaySmall.withFamily(),
+        headlineLarge = base.headlineLarge.withFamily(),
+        headlineMedium = base.headlineMedium.withFamily(),
+        headlineSmall = base.headlineSmall.withFamily(),
+        titleLarge = base.titleLarge.withFamily(),
+        titleMedium = base.titleMedium.withFamily(),
+        titleSmall = base.titleSmall.withFamily(),
+        bodyLarge = base.bodyLarge.withFamily(),
+        bodyMedium = base.bodyMedium.withFamily(),
+        bodySmall = base.bodySmall.withFamily(),
+        labelLarge = base.labelLarge.withFamily(),
+        labelMedium = base.labelMedium.withFamily(),
+        labelSmall = base.labelSmall.withFamily()
+    )
+}
+
+private val ManropeAppTypography = typographyWithFamily(ManropeFontFamily)
+private val NunitoAppTypography = typographyWithFamily(NunitoFontFamily)
+private val LoraAppTypography = typographyWithFamily(LoraFontFamily)
+private val JetBrainsMonoAppTypography = typographyWithFamily(JetBrainsMonoFontFamily)
+private val InterAppTypography = typographyWithFamily(InterFontFamily)
+
+private fun boldTypography(base: Typography): Typography {
+    fun TextStyle.bold() = copy(fontWeight = FontWeight.Bold)
+    return base.copy(
+        displayLarge = base.displayLarge.bold(),
+        displayMedium = base.displayMedium.bold(),
+        displaySmall = base.displaySmall.bold(),
+        headlineLarge = base.headlineLarge.bold(),
+        headlineMedium = base.headlineMedium.bold(),
+        headlineSmall = base.headlineSmall.bold(),
+        titleLarge = base.titleLarge.bold(),
+        titleMedium = base.titleMedium.bold(),
+        titleSmall = base.titleSmall.bold(),
+        bodyLarge = base.bodyLarge.bold(),
+        bodyMedium = base.bodyMedium.bold(),
+        bodySmall = base.bodySmall.bold(),
+        labelLarge = base.labelLarge.bold(),
+        labelMedium = base.labelMedium.bold(),
+        labelSmall = base.labelSmall.bold()
+    )
+}
+
+// Precomputed once: toggling bold text only swaps an immutable Typography object.
+private val DefaultBoldTypography = boldTypography(DefaultAppTypography)
+private val ManropeBoldTypography = boldTypography(ManropeAppTypography)
+private val NunitoBoldTypography = boldTypography(NunitoAppTypography)
+private val LoraBoldTypography = boldTypography(LoraAppTypography)
+private val JetBrainsMonoBoldTypography = boldTypography(JetBrainsMonoAppTypography)
+private val InterBoldTypography = boldTypography(InterAppTypography)
+
 @Composable
 fun AgonAppTheme(
     themePreference: ThemePreference = ThemePreference.SYSTEM,
     palette: AppPalette = AppPalette.MONOCHROME,
+    textStyle: AppTextStyle = AppTextStyle.DEFAULT,
+    boldText: Boolean = false,
     highContrastDark: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -742,8 +844,18 @@ fun AgonAppTheme(
         }
     }
 
+    val typography = when (textStyle) {
+        AppTextStyle.DEFAULT -> if (boldText) DefaultBoldTypography else DefaultAppTypography
+        AppTextStyle.MANROPE -> if (boldText) ManropeBoldTypography else ManropeAppTypography
+        AppTextStyle.NUNITO -> if (boldText) NunitoBoldTypography else NunitoAppTypography
+        AppTextStyle.LORA -> if (boldText) LoraBoldTypography else LoraAppTypography
+        AppTextStyle.JETBRAINS_MONO -> if (boldText) JetBrainsMonoBoldTypography else JetBrainsMonoAppTypography
+        AppTextStyle.INTER -> if (boldText) InterBoldTypography else InterAppTypography
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = typography,
         content = content,
     )
 }

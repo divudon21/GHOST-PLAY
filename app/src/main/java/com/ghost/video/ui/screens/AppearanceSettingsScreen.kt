@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ViewList
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -45,13 +47,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
@@ -62,8 +63,10 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.R
 import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
+import com.ghost.video.data.AppTextStyle
 import com.ghost.video.ui.theme.paletteScheme
 import com.ghost.video.data.DialogThemePreference
 import com.ghost.video.data.ThemePreference
@@ -78,12 +81,15 @@ fun AppearanceSettingsScreen(
 ) {
     val currentTheme by viewModel.themePreference.collectAsState()
     val currentPalette by viewModel.appPalette.collectAsState()
+    val currentTextStyle by viewModel.appTextStyle.collectAsState()
+    val boldText by viewModel.boldText.collectAsState()
     val currentLayout by viewModel.viewLayout.collectAsState()
     val currentDialogTheme by viewModel.dialogThemePreference.collectAsState()
     val highContrastDark by viewModel.highContrastDark.collectAsState()
     val loadingIndicatorStyle by viewModel.loadingIndicatorStyle.collectAsState()
     val systemInDark = isSystemInDarkTheme()
     var showPalettePicker by remember { mutableStateOf(false) }
+    var showTextStylePicker by remember { mutableStateOf(false) }
     var showLayoutPicker by remember { mutableStateOf(false) }
 
     // AMOLED removed — only System, Light, Dark
@@ -130,6 +136,18 @@ fun AppearanceSettingsScreen(
     // 5 curated Material 3 palettes (multi-hue combinations).
     val palettes = remember { appPalettes() }
     val selectedPalette = palettes.firstOrNull { it.palette == currentPalette } ?: palettes.first()
+    val textStyles = remember {
+        listOf(
+            TextStyleOption(AppTextStyle.DEFAULT, "Default", "Android system text"),
+            TextStyleOption(AppTextStyle.MANROPE, "Manrope", "Clean and modern"),
+            TextStyleOption(AppTextStyle.NUNITO, "Nunito", "Soft and friendly"),
+            TextStyleOption(AppTextStyle.LORA, "Lora", "Elegant serif"),
+            TextStyleOption(AppTextStyle.JETBRAINS_MONO, "JetBrains Mono", "Technical monospace"),
+            TextStyleOption(AppTextStyle.INTER, "Inter", "Sharp screen readability")
+        )
+    }
+    val selectedTextStyle = textStyles.firstOrNull { it.style == currentTextStyle }
+        ?: textStyles.first()
 
     Scaffold(
         topBar = {
@@ -157,6 +175,20 @@ fun AppearanceSettingsScreen(
                 PalettePickerCard(
                     selectedOption = selectedPalette,
                     onClick = { showPalettePicker = true }
+                )
+            }
+
+            item {
+                TextStylePickerCard(
+                    selectedOption = selectedTextStyle,
+                    onClick = { showTextStylePicker = true }
+                )
+            }
+
+            item {
+                BoldTextToggleCard(
+                    checked = boldText,
+                    onCheckedChange = viewModel::setBoldText
                 )
             }
 
@@ -213,6 +245,18 @@ fun AppearanceSettingsScreen(
         )
     }
 
+    if (showTextStylePicker) {
+        TextStylePickerDialog(
+            options = textStyles,
+            selectedStyle = currentTextStyle,
+            onDismiss = { showTextStylePicker = false },
+            onTextStyleSelected = { style ->
+                viewModel.setAppTextStyle(style)
+                showTextStylePicker = false
+            }
+        )
+    }
+
     if (showLayoutPicker) {
         ViewLayoutPickerDialog(
             options = viewLayoutOptions,
@@ -238,12 +282,10 @@ data class CapsuleSwitcherOption(
 // ═══════════════════════════════════════════════════════════════════════════
 //  Lightweight capsule switcher
 //
-//  Rewritten to be solid & performance-friendly:
-//   • No per-frame physics loop (withFrameNanos), no drag gestures, no haptic
-//     vibration or squash/stretch effects — those caused jitter, extra
-//     GPU work and the "vibration" feel the user disliked.
-//   • The thumb slides to its target with a single cheap animateDpAsState tween.
-//   • Flat solid colours instead of linearGradient brushes (cheaper to draw).
+//  Uses the exact visual treatment of the Home / Audio / Settings capsule:
+//   • Same 56dp track, 5dp inner padding and circular geometry.
+//   • Active app-palette colour with matching on-primary content.
+//   • No slide animation, shadow, physics, drag, haptics or gradient work.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Palette of flat colours shared by every capsule card. */
@@ -262,16 +304,19 @@ private data class CapsuleColors(
 @Composable
 private fun rememberCapsuleColors(): CapsuleColors {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val scheme = MaterialTheme.colorScheme
     return CapsuleColors(
-        cardBg = if (isDark) Color(0xFF1B1B1E) else Color(0xFFFFFFFF),
-        iconBadgeBg = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f),
-        iconBadgeColor = if (isDark) Color(0xFFEAEAEA) else Color(0xFF2B2B2B),
-        labelColor = if (isDark) Color(0xFFF5F5F5) else Color(0xFF1C1C1E),
-        trackBg = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f),
-        trackBorder = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f),
-        thumbBg = if (isDark) Color(0xFF3A3A3E) else Color(0xFFFFFFFF),
-        activeColor = if (isDark) Color.White else Color(0xFF111111),
-        inactiveColor = if (isDark) Color.White.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.38f)
+        // Use Material theme roles instead of fixed white/grey values so the
+        // complete capsule card follows the selected app palette.
+        cardBg = scheme.surface,
+        iconBadgeBg = scheme.primaryContainer,
+        iconBadgeColor = scheme.onPrimaryContainer,
+        labelColor = scheme.onSurface,
+        trackBg = scheme.primaryContainer.copy(alpha = if (isDark) 0.32f else 0.48f),
+        trackBorder = scheme.primary.copy(alpha = if (isDark) 0.22f else 0.18f),
+        thumbBg = scheme.primary,
+        activeColor = scheme.onPrimary,
+        inactiveColor = scheme.onSurfaceVariant.copy(alpha = if (isDark) 0.62f else 0.58f)
     )
 }
 
@@ -350,9 +395,8 @@ private fun CapsuleHeader(title: String, icon: ImageVector, colors: CapsuleColor
 }
 
 /**
- * Solid segmented track with a single sliding thumb. The thumb position is a plain
- * fraction of the track width, animated with one cheap [animateDpAsState] tween —
- * no physics, no drag, no haptics.
+ * Solid segmented track matching the main bottom capsule. Selection switches
+ * immediately, avoiding the same uneven slide motion removed from bottom nav.
  */
 @Composable
 private fun CapsuleTrack(
@@ -362,8 +406,8 @@ private fun CapsuleTrack(
     onSelected: (Int) -> Unit,
     segment: @Composable (index: Int) -> Unit
 ) {
-    val trackHeight = 58.dp
-    val pad = 6.dp
+    val trackHeight = 56.dp
+    val pad = 5.dp
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -375,19 +419,14 @@ private fun CapsuleTrack(
     ) {
         val segWidth = maxWidth / itemCount
         val safeIndex = selectedIndex.coerceIn(0, itemCount - 1)
-        val thumbOffset by animateDpAsState(
-            targetValue = segWidth * safeIndex,
-            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-            label = "capsuleThumb"
-        )
+        val thumbOffset = segWidth * safeIndex
 
-        // Sliding thumb (solid, flat, single light shadow).
+        // Flat selected segment with no slide or elevation.
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .width(segWidth)
                 .fillMaxHeight()
-                .shadow(2.dp, CircleShape)
                 .clip(CircleShape)
                 .background(colors.thumbBg)
         )
@@ -423,7 +462,7 @@ private fun CapsuleSegmentContent(
 ) {
     val tint by animateColorAsState(
         targetValue = if (isActive) colors.activeColor else colors.inactiveColor,
-        animationSpec = tween(200),
+        animationSpec = tween(180),
         label = "segTint"
     )
     Column(
@@ -546,6 +585,123 @@ fun MinimalSettingRow(
         }
         HorizontalDivider(thickness = 0.6.dp, color = lineColor)
     }
+}
+
+@Composable
+private fun BoldTextToggleCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    MinimalSettingRow(
+        title = "Bold text",
+        subtitle = "Make the selected text style bold",
+        leadingIcon = Icons.Default.FormatBold,
+        onClick = { onCheckedChange(!checked) },
+        trailing = {
+            com.ghost.video.ui.components.SmoothSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        }
+    )
+}
+
+data class TextStyleOption(
+    val style: AppTextStyle,
+    val title: String,
+    val description: String
+)
+
+private val ManropePreviewFamily = FontFamily(Font(R.font.manrope_variable))
+private val NunitoPreviewFamily = FontFamily(Font(R.font.nunito_variable))
+private val LoraPreviewFamily = FontFamily(Font(R.font.lora_variable))
+private val JetBrainsPreviewFamily = FontFamily(Font(R.font.jetbrains_mono_variable))
+private val InterPreviewFamily = FontFamily(Font(R.font.inter_variable))
+
+private fun previewFontFamily(style: AppTextStyle): FontFamily = when (style) {
+    AppTextStyle.DEFAULT -> FontFamily.Default
+    AppTextStyle.MANROPE -> ManropePreviewFamily
+    AppTextStyle.NUNITO -> NunitoPreviewFamily
+    AppTextStyle.LORA -> LoraPreviewFamily
+    AppTextStyle.JETBRAINS_MONO -> JetBrainsPreviewFamily
+    AppTextStyle.INTER -> InterPreviewFamily
+}
+
+@Composable
+fun TextStylePickerCard(
+    selectedOption: TextStyleOption,
+    onClick: () -> Unit
+) {
+    MinimalSettingRow(
+        title = "Choose Text Style",
+        subtitle = selectedOption.title,
+        leadingIcon = Icons.Default.TextFields,
+        onClick = onClick
+    )
+}
+
+@Composable
+fun TextStylePickerDialog(
+    options: List<TextStyleOption>,
+    selectedStyle: AppTextStyle,
+    onDismiss: () -> Unit,
+    onTextStyleSelected: (AppTextStyle) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose Text Style") },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 440.dp)
+            ) {
+                items(options) { option ->
+                    val selected = option.style == selectedStyle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else Color.Transparent
+                            )
+                            .clickable { onTextStyleSelected(option.style) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = option.title,
+                                fontFamily = previewFontFamily(option.style),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = option.description,
+                                fontFamily = previewFontFamily(option.style),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (selected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable

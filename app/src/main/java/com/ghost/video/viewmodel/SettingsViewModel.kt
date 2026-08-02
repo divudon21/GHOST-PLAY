@@ -5,12 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
+import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.DecoderPriority
 import com.ghost.video.data.OrientationPreference
 import com.ghost.video.data.SettingsRepository
 import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.data.ThumbnailStrategy
+import com.ghost.video.data.ThemeSettings
 import com.ghost.video.data.DialogThemePreference
 import com.ghost.video.data.LoadingIndicatorStyle
 import com.ghost.video.data.ViewLayout
@@ -21,6 +23,15 @@ import kotlinx.coroutines.launch
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
+
+    // Null only during the initial disk read. MainActivity holds its first draw
+    // until this atomic appearance snapshot is available.
+    val startupThemeSettings: StateFlow<ThemeSettings?> = repository.themeSettings
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = null
+        )
 
     val themePreference: StateFlow<ThemePreference> = repository.themePreference
         .stateIn(
@@ -41,6 +52,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = AppPalette.MONOCHROME
+        )
+
+    val appTextStyle: StateFlow<AppTextStyle> = repository.appTextStyle
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = AppTextStyle.DEFAULT
+        )
+
+    val boldText: StateFlow<Boolean> = repository.boldText
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
         )
 
     val thumbnailStrategy: StateFlow<ThumbnailStrategy> = repository.thumbnailStrategy
@@ -260,13 +285,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
-    val glassMiniPlayerEnabled: StateFlow<Boolean> = repository.glassMiniPlayerEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = false
-        )
-
     val highContrastDark: StateFlow<Boolean> = repository.highContrastDark
         .stateIn(
             scope = viewModelScope,
@@ -446,10 +464,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { repository.setVolumeBoostEnabled(enabled) }
     }
 
-    fun setGlassMiniPlayerEnabled(enabled: Boolean) {
-        viewModelScope.launch { repository.setGlassMiniPlayerEnabled(enabled) }
-    }
-
     fun setHighContrastDark(enabled: Boolean) {
         viewModelScope.launch { repository.setHighContrastDark(enabled) }
     }
@@ -481,6 +495,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      */
     fun setAppPalette(palette: AppPalette) {
         viewModelScope.launch { repository.setAppPalette(palette) }
+    }
+
+    fun setAppTextStyle(style: AppTextStyle) {
+        viewModelScope.launch { repository.setAppTextStyle(style) }
+    }
+
+    fun setBoldText(enabled: Boolean) {
+        viewModelScope.launch { repository.setBoldText(enabled) }
     }
 
     fun setColorSwatch(preference: AppColorPreference, hex: Int) {

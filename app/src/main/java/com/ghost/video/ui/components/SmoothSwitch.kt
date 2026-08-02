@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -129,7 +128,6 @@ fun SmoothSwitch(
                 .align(Alignment.CenterStart)
                 .offset(x = thumbOffset)
                 .size(thumbSize)
-                .shadow(2.dp, CircleShape)
                 .clip(CircleShape)
                 .background(thumbColor, CircleShape),
             contentAlignment = Alignment.Center

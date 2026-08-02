@@ -2,10 +2,10 @@ package com.ghost.video
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
@@ -23,14 +23,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
 import com.ghost.video.R
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.NavigationBar
@@ -47,9 +45,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.ghost.video.viewmodel.AudioViewModel
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import com.ghost.video.ui.screens.AudioPlayerScreen
 import com.ghost.video.ui.screens.AudioScreen
 import com.ghost.video.ui.screens.AudioSettingsScreen
@@ -71,13 +66,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.Dp
@@ -95,6 +88,7 @@ import androidx.compose.material3.IconButton
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
 import java.net.URLEncoder
@@ -113,7 +107,6 @@ import com.ghost.video.ui.screens.SettingsScreen
 import com.ghost.video.ui.screens.SubtitleSettingsScreen
 import com.ghost.video.ui.screens.ThumbnailSettingsScreen
 import com.ghost.video.ui.theme.AgonAppTheme
-import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
 import java.net.URLDecoder
@@ -124,8 +117,6 @@ import kotlin.math.roundToInt
 // Settings pages use a restrained shared-axis transition: gentle enough for a
 // smooth return to the settings list without a noticeable jump or heavy motion.
 private const val ANIM_DURATION = 260
-private const val MINI_PLAYER_IN = 260
-private const val MINI_PLAYER_OUT = 200
 
 private fun navTween(): FiniteAnimationSpec<IntOffset> = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
 private fun alphaTween() = tween<Float>(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
@@ -190,18 +181,37 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Do not let Android draw a frame with fallback theme values. The
+        // listener is removed immediately after Compose has the persisted theme,
+        // so there is no polling or ongoing rendering cost.
+        var isInitialThemeReady = false
+        val contentView = window.decorView
+        val firstDrawGate = object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!isInitialThemeReady) return false
+                if (contentView.viewTreeObserver.isAlive) {
+                    contentView.viewTreeObserver.removeOnPreDrawListener(this)
+                }
+                return true
+            }
+        }
+        contentView.viewTreeObserver.addOnPreDrawListener(firstDrawGate)
+
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel()
-            val themePreference by settingsViewModel.themePreference.collectAsState()
-            val appPalette by settingsViewModel.appPalette.collectAsState()
-            val highContrastDark by settingsViewModel.highContrastDark.collectAsState()
-            
-            AgonAppTheme(
-                themePreference = themePreference,
-                palette = appPalette,
-                highContrastDark = highContrastDark
-            ) {
-                MainApp(externalVideoUrl = externalVideoUrl)
+            val startupTheme by settingsViewModel.startupThemeSettings.collectAsState()
+
+            startupTheme?.let { savedTheme ->
+                AgonAppTheme(
+                    themePreference = savedTheme.theme,
+                    palette = savedTheme.palette,
+                    textStyle = savedTheme.textStyle,
+                    boldText = savedTheme.boldText,
+                    highContrastDark = savedTheme.highContrastDark
+                ) {
+                    MainApp(externalVideoUrl = externalVideoUrl)
+                }
+                SideEffect { isInitialThemeReady = true }
             }
         }
     }
@@ -235,84 +245,41 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
         modifier = Modifier.fillMaxSize(),
         bottomBar = { 
             Column {
-                // Mini Audio Player with slide-up/down animation
+                // Compact mini audio player.
                 val currentAudio by audioViewModel.currentAudio.collectAsState()
                 val isPlaying by audioViewModel.isPlaying.collectAsState()
-                
-                val showMiniPlayer = currentAudio != null &&
+                val miniPlayerAudio = currentAudio
+
+                val showMiniPlayer = miniPlayerAudio != null &&
                         currentRoute != "player/{url}" &&
                         currentRoute != "audio_player"
 
-                // Glass effect toggle from Audio settings.
-                val settingsViewModel: com.ghost.video.viewmodel.SettingsViewModel = viewModel()
-                val glassMiniPlayer by settingsViewModel.glassMiniPlayerEnabled.collectAsState()
-
-                AnimatedVisibility(
-                    visible = showMiniPlayer,
-                    enter = slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = tween(MINI_PLAYER_IN)
-                    ) + fadeIn(animationSpec = tween(MINI_PLAYER_IN)),
-                    exit = slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = tween(MINI_PLAYER_OUT)
-                    ) + fadeOut(animationSpec = tween(MINI_PLAYER_OUT))
-                ) {
-                    if (currentAudio != null) {
-                        // Mini player uses NEUTRAL surface colours so the selected
-                        // app colour does NOT apply to it.
-                        val containerColor = if (glassMiniPlayer)
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant
-
-                        val glassModifier = if (glassMiniPlayer)
-                            Modifier.background(
-                                brush = Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.10f)
-                                    )
-                                ),
-                                shape = RoundedCornerShape(12.dp)
-                            ).border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        else Modifier
-
+                // A flat, compact mini player: no glass shader, entrance animation,
+                // stacked gesture detectors, elevation, or extra settings observer.
+                if (showMiniPlayer && miniPlayerAudio != null) {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                .then(glassModifier)
-                                .pointerInput(Unit) {
-                                    detectTapGestures(onTap = {
-                                        navController.navigate("audio_player") { launchSingleTop = true }
-                                    })
-                                }
-                                .pointerInput(Unit) {
-                                    detectVerticalDragGestures { _, dragAmount ->
-                                        // Swipe up (negative drag) opens the full player.
-                                        if (dragAmount < -8f) {
-                                            navController.navigate("audio_player") { launchSingleTop = true }
-                                        }
-                                    }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .clickable {
+                                    navController.navigate("audio_player") { launchSingleTop = true }
                                 },
-                            colors = CardDefaults.cardColors(containerColor = containerColor),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(8.dp),
+                                    .padding(horizontal = 7.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // Music icon
                                 Box(
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(40.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
                                     contentAlignment = Alignment.Center
@@ -323,18 +290,18 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                                         tint = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        currentAudio!!.name,
+                                        miniPlayerAudio.name,
                                         style = MaterialTheme.typography.bodyLarge,
                                         maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    if (!currentAudio!!.artist.isNullOrEmpty() && currentAudio!!.artist != "<unknown>") {
+                                    if (!miniPlayerAudio.artist.isNullOrEmpty() && miniPlayerAudio.artist != "<unknown>") {
                                         Text(
-                                            currentAudio!!.artist!!,
+                                            miniPlayerAudio.artist,
                                             style = MaterialTheme.typography.bodySmall,
                                             maxLines = 1,
                                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -377,8 +344,7 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                             }
                         }
                     }
-                }
-                
+
                 if (currentRoute in showBottomNavRoutes) {
                     BottomNav(navController, currentRoute)
                 }
@@ -599,17 +565,17 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
     val icons = listOf(
         painterResource(id = R.drawable.ic_home),
         painterResource(id = R.drawable.ic_music),
-        Icons.Default.Settings
+        painterResource(id = R.drawable.ic_settings)
     )
     val currentIndex = routes.indexOf(currentRoute).coerceAtLeast(0)
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    // Keep the primary Home / Audio / Settings capsule visually light so the
-    // selected segment is the focus, not the container itself.
+    // Keep the exact existing capsule geometry, but tint the moving selected
+    // segment with the active app colour from Appearance settings.
     val trackBg = if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.035f)
     val trackBorder = if (isDark) Color.White.copy(alpha = 0.075f) else Color.Black.copy(alpha = 0.06f)
-    val thumbBg = if (isDark) Color(0xFF35353A) else Color(0xFFFFFFFF)
-    val activeColor = if (isDark) Color.White else Color(0xFF111111)
+    val thumbBg = MaterialTheme.colorScheme.primary
+    val activeColor = MaterialTheme.colorScheme.onPrimary
     val inactiveColor = if (isDark) Color.White.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.38f)
 
     fun navigateTo(idx: Int) {
@@ -637,20 +603,14 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
                 .padding(pad)
         ) {
             val segWidth = maxWidth / routes.size
-            // A single low-cost slide, tuned to feel calm like Telegram's bottom
-            // navigation while avoiding springs or layout work that causes jitter.
-            val thumbOffset by animateDpAsState(
-                targetValue = segWidth * currentIndex,
-                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-                label = "bottomNavThumb"
-            )
+            // Switch the selected segment instantly; no sliding animation.
+            val thumbOffset = segWidth * currentIndex
 
             Box(
                 modifier = Modifier
                     .offset(x = thumbOffset)
                     .width(segWidth)
                     .fillMaxHeight()
-                    .shadow(1.dp, CircleShape)
                     .clip(CircleShape)
                     .background(thumbBg)
             )

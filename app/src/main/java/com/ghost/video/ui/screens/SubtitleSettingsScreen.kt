@@ -104,9 +104,9 @@ fun SubtitleSettingsScreen(
                     titleIcon = Icons.Rounded.FontDownload,
                     options = listOf(
                         CapsuleSwitcherOption("Default", Icons.Rounded.TextFields),
+                        CapsuleSwitcherOption("Mono", Icons.Rounded.TextFields),
                         CapsuleSwitcherOption("Sans", Icons.Rounded.TextRotationNone),
-                        CapsuleSwitcherOption("Serif", Icons.Rounded.Title),
-                        CapsuleSwitcherOption("Mono", Icons.Rounded.TextFields)
+                        CapsuleSwitcherOption("Serif", Icons.Rounded.Title)
                     ),
                     selectedIndex = currentFont.ordinal,
                     onSelected = { viewModel.setSubtitleFont(SubtitleFont.entries[it]) }

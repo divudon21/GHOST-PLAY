@@ -147,11 +147,6 @@ fun HomeScreen(
                     modifier = Modifier.size(36.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    "GHOST PLAY",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
             IconButton(onClick = { showUrlInput = !showUrlInput }) {
                 Icon(painterResource(id = R.drawable.ic_url), contentDescription = "Add URL", modifier = Modifier.size(28.dp))

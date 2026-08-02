@@ -5,10 +5,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -30,6 +34,20 @@ enum class AppPalette {
     MONOCHROME, AURORA, SUNSET, OCEANIC, VERDANT,
     MIDNIGHT, ROSEGOLD, EMERALD, LAVENDER, EMBER
 }
+
+enum class AppTextStyle {
+    // Keep the original four entries first so existing stored ordinals remain valid.
+    MANROPE, NUNITO, LORA, JETBRAINS_MONO, DEFAULT, INTER
+}
+
+/** Critical appearance values loaded together before the first app frame. */
+data class ThemeSettings(
+    val theme: ThemePreference,
+    val palette: AppPalette,
+    val textStyle: AppTextStyle,
+    val boldText: Boolean,
+    val highContrastDark: Boolean
+)
 
 enum class ThumbnailStrategy {
     FIRST_FRAME, FRAME_AT_POSITION, HYBRID
@@ -64,6 +82,8 @@ class SettingsRepository(private val context: Context) {
     private val THEME_KEY = intPreferencesKey("theme_preference")
     private val COLOR_KEY = intPreferencesKey("color_preference")
     private val PALETTE_KEY = intPreferencesKey("app_palette")
+    private val TEXT_STYLE_KEY = intPreferencesKey("app_text_style")
+    private val BOLD_TEXT_KEY = booleanPreferencesKey("app_bold_text")
     private val THUMBNAIL_STRATEGY_KEY = intPreferencesKey("thumbnail_strategy")
     private val THUMBNAIL_POSITION_KEY = intPreferencesKey("thumbnail_position_percent")
     private val VIEW_LAYOUT_KEY = intPreferencesKey("view_layout")
@@ -95,13 +115,39 @@ class SettingsRepository(private val context: Context) {
     private val SYSTEM_CAPTION_STYLE_KEY = booleanPreferencesKey("system_caption_style")
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
-    private val GLASS_MINI_PLAYER_KEY = booleanPreferencesKey("glass_mini_player_enabled")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
     private val CUSTOM_COLOR_KEY = intPreferencesKey("custom_color_value")
     private val BATTERY_SAVER_KEY = booleanPreferencesKey("battery_saver")
     private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
     private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
     private val LOADING_INDICATOR_STYLE_KEY = intPreferencesKey("loading_indicator_style")
+
+    /**
+     * One atomic snapshot for startup theming. Unlike separate StateFlows with
+     * default values, this emits only after DataStore has supplied the persisted
+     * values, so the first rendered frame never flashes the default palette.
+     */
+    val themeSettings: Flow<ThemeSettings> = context.dataStore.data
+        .catch { error ->
+            if (error is CancellationException) throw error
+            emit(emptyPreferences())
+        }
+        .map { preferences ->
+            ThemeSettings(
+                theme = ThemePreference.entries.getOrElse(
+                    preferences[THEME_KEY] ?: ThemePreference.SYSTEM.ordinal
+                ) { ThemePreference.SYSTEM },
+                palette = AppPalette.entries.getOrElse(
+                    preferences[PALETTE_KEY] ?: AppPalette.MONOCHROME.ordinal
+                ) { AppPalette.MONOCHROME },
+                textStyle = AppTextStyle.entries.getOrElse(
+                    preferences[TEXT_STYLE_KEY] ?: AppTextStyle.DEFAULT.ordinal
+                ) { AppTextStyle.DEFAULT },
+                boldText = preferences[BOLD_TEXT_KEY] ?: false,
+                highContrastDark = preferences[HIGH_CONTRAST_DARK_KEY] ?: false
+            )
+        }
+        .distinctUntilChanged()
 
     val themePreference: Flow<ThemePreference> = context.dataStore.data
         .map { preferences ->
@@ -118,8 +164,19 @@ class SettingsRepository(private val context: Context) {
     val appPalette: Flow<AppPalette> = context.dataStore.data
         .map { preferences ->
             val value = preferences[PALETTE_KEY] ?: AppPalette.MONOCHROME.ordinal
-            AppPalette.values().getOrElse(value) { AppPalette.MONOCHROME }
+            AppPalette.entries.getOrElse(value) { AppPalette.MONOCHROME }
         }
+
+    val appTextStyle: Flow<AppTextStyle> = context.dataStore.data
+        .map { preferences ->
+            val value = preferences[TEXT_STYLE_KEY] ?: AppTextStyle.DEFAULT.ordinal
+            AppTextStyle.entries.getOrElse(value) { AppTextStyle.DEFAULT }
+        }
+        .distinctUntilChanged()
+
+    val boldText: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[BOLD_TEXT_KEY] ?: false }
+        .distinctUntilChanged()
 
     val thumbnailStrategy: Flow<ThumbnailStrategy> = context.dataStore.data
         .map { preferences ->
@@ -237,9 +294,6 @@ class SettingsRepository(private val context: Context) {
     val volumeBoostEnabled: Flow<Boolean> = context.dataStore.data
         .map { it[VOLUME_BOOST_KEY] ?: false }
 
-    val glassMiniPlayerEnabled: Flow<Boolean> = context.dataStore.data
-        .map { it[GLASS_MINI_PLAYER_KEY] ?: false }
-
     val highContrastDark: Flow<Boolean> = context.dataStore.data
         .map { it[HIGH_CONTRAST_DARK_KEY] ?: false }
 
@@ -273,6 +327,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppPalette(palette: AppPalette) {
         context.dataStore.edit { preferences ->
             preferences[PALETTE_KEY] = palette.ordinal
+        }
+    }
+
+    suspend fun setAppTextStyle(style: AppTextStyle) {
+        context.dataStore.edit { preferences ->
+            preferences[TEXT_STYLE_KEY] = style.ordinal
+        }
+    }
+
+    suspend fun setBoldText(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[BOLD_TEXT_KEY] = enabled
         }
     }
 
@@ -406,10 +472,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
         context.dataStore.edit { it[VOLUME_BOOST_KEY] = enabled }
-    }
-
-    suspend fun setGlassMiniPlayerEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[GLASS_MINI_PLAYER_KEY] = enabled }
     }
 
     suspend fun setHighContrastDark(enabled: Boolean) {
