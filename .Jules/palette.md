@@ -1,3 +1,7 @@
 ## 2023-11-20 - [Soft Keyboard & Clipboard UX in Jetpack Compose]
 **Learning:** In text fields of media-centric applications, users often paste links (e.g. video URLs) from the system clipboard or type them out and expect to launch playback instantly using the soft keyboard's confirmation key (like Enter / Go / Done) without being forced to manually click a visual "play" button. Additionally, dynamic trailing icons that swap a "Paste" helper button when empty for a "Clear" + "Play" combination when populated maximize efficiency while maintaining a clean aesthetic.
 **Action:** Always map text fields accepting URLs/actions to proper `ImeAction` and `KeyboardActions` options, and provide dynamic paste/clear helpers inside the field's trailing element with custom `contentDescription` for screen readers.
+
+## 2025-02-14 - [Direct Soft-Keyboard Dismiss and Clear Actions in Rename Dialogs]
+**Learning:** Users editing text inputs like rename dialogs on mobile devices heavily rely on the soft keyboard's "Done" or "Enter" actions to submit form values seamlessly without needing to dismiss the keyboard and tap an explicit dialog button. Additionally, a clear icon with a descriptive screen-reader description inside dialog text fields allows quick revision of long media filenames.
+**Action:** Always implement `ImeAction.Done` and corresponding `KeyboardActions` in dialog text fields alongside a dynamic trailing close/clear icon to provide quick keyboard-only input dismissals and edits.
