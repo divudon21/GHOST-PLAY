@@ -1,5 +1,6 @@
 package com.ghost.video.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -70,13 +71,15 @@ fun GesturesSettingsScreen(
                 showTopDivider = true
             )
 
-            // Seek sensitivity
-            GestureSensitivityItem(
-                title = "Seek gesture sensitivity",
-                value = seekSensitivity,
-                enabled = seekEnabled,
-                onValueChange = { viewModel.setGestureSeekSensitivity(it) }
-            )
+            // Seek sensitivity — collapses when the gesture is off.
+            AnimatedVisibility(visible = seekEnabled) {
+                GestureSensitivityItem(
+                    title = "Seek gesture sensitivity",
+                    value = seekSensitivity,
+                    enabled = true,
+                    onValueChange = { viewModel.setGestureSeekSensitivity(it) }
+                )
+            }
 
             // Brightness gesture
             GestureToggleItem(
@@ -87,13 +90,15 @@ fun GesturesSettingsScreen(
                 onCheckedChange = { viewModel.setGestureBrightnessEnabled(it) }
             )
 
-            // Brightness sensitivity
-            GestureSensitivityItem(
-                title = "Brightness gesture sensitivity",
-                value = brightnessSensitivity,
-                enabled = brightnessEnabled,
-                onValueChange = { viewModel.setGestureBrightnessSensitivity(it) }
-            )
+            // Brightness sensitivity — collapses when the gesture is off.
+            AnimatedVisibility(visible = brightnessEnabled) {
+                GestureSensitivityItem(
+                    title = "Brightness gesture sensitivity",
+                    value = brightnessSensitivity,
+                    enabled = true,
+                    onValueChange = { viewModel.setGestureBrightnessSensitivity(it) }
+                )
+            }
 
             // Volume gesture
             GestureToggleItem(
@@ -104,13 +109,15 @@ fun GesturesSettingsScreen(
                 onCheckedChange = { viewModel.setGestureVolumeEnabled(it) }
             )
 
-            // Volume sensitivity
-            GestureSensitivityItem(
-                title = "Volume gesture sensitivity",
-                value = volumeSensitivity,
-                enabled = volumeEnabled,
-                onValueChange = { viewModel.setGestureVolumeSensitivity(it) }
-            )
+            // Volume sensitivity — collapses when the gesture is off.
+            AnimatedVisibility(visible = volumeEnabled) {
+                GestureSensitivityItem(
+                    title = "Volume gesture sensitivity",
+                    value = volumeSensitivity,
+                    enabled = true,
+                    onValueChange = { viewModel.setGestureVolumeSensitivity(it) }
+                )
+            }
 
             // Zoom gesture
             GestureToggleItem(

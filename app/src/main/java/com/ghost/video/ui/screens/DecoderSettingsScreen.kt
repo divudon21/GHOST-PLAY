@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -95,80 +96,6 @@ fun DecoderSettingsScreen(
     }
 
 @Composable
-fun DecoderPickerCard(
-    selectedOption: DecoderOption,
-    onClick: () -> Unit
-) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = selectedOption.icon,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Choose decoder",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = selectedOption.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = "Choose decoder",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-    }
-}
-
-@Composable
-fun DecoderPickerDialog(
-    options: List<DecoderOption>,
-    selectedPriority: DecoderPriority,
-    onDismiss: () -> Unit,
-    onDecoderSelected: (DecoderPriority) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Choose decoder") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                options.forEach { option ->
-                    DecoderDialogOptionRow(
-                        option = option,
-                        isSelected = selectedPriority == option.priority,
-                        onClick = { onDecoderSelected(option.priority) }
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
 fun DecoderDialogOptionRow(
     option: DecoderOption,
     isSelected: Boolean,
@@ -211,70 +138,7 @@ fun DecoderDialogOptionRow(
     }
 }
 
-@Composable
-fun DecoderOptionCard(
-    option: DecoderOption,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Radio button circle
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(
-                        color = if (isSelected)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.outline,
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onPrimary,
-                                CircleShape
-                            )
-                    )
-                }
-            }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = option.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
 
 data class DecoderOption(
     val title: String,

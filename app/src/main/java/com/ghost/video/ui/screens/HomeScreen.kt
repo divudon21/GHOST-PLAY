@@ -7,17 +7,20 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -43,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -55,10 +60,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 import com.ghost.video.R
@@ -67,6 +73,8 @@ import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ViewLayout
 import com.ghost.video.data.VideoThumbnailPipeline
 import com.ghost.video.ui.components.AppLoadingIndicator
+import com.ghost.video.ui.components.EmptyState
+import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -87,16 +95,26 @@ data class LocalVideo(
     val height: Int = 0
 )
 
+// In-memory cache so the video list survives tab switches without re-querying.
+private var cachedVideos: List<LocalVideo>? = null
+
 @Composable
 fun HomeScreen(
     onPlayUrl: (String) -> Unit,
-    settingsViewModel: SettingsViewModel = viewModel()
+    settingsViewModel: SettingsViewModel = viewModel(),
+    onSwipeNext: () -> Unit = {},
+    onSwipePrevious: () -> Unit = {}
 ) {
     var url by remember { mutableStateOf("") }
     var showUrlInput by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    var localVideos by remember { mutableStateOf<List<LocalVideo>>(emptyList()) }
+    val focusManager = LocalFocusManager.current
+    // Cache keeps the list alive across tab switches, so coming back to Home
+    // does NOT re-query MediaStore (the old reload caused tab-switch jitter).
+    var localVideos by remember { mutableStateOf(cachedVideos ?: emptyList()) }
     var hasPermission by remember { mutableStateOf(checkVideoPermission(context)) }
     var refreshKey by remember { mutableStateOf(0) }
     val viewLayout by settingsViewModel.viewLayout.collectAsState()
@@ -116,22 +134,50 @@ fun HomeScreen(
         hasPermission = permissions.values.all { it }
     }
 
+    val permissionsToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.READ_MEDIA_VIDEO)
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
     LaunchedEffect(hasPermission, refreshKey) {
         if (hasPermission) {
-            localVideos = loadLocalVideos(context)
-        } else {
-            val permissionsToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
+            val cached = cachedVideos
+            if (cached == null || refreshKey > 0) {
+                val loaded = loadLocalVideos(context)
+                cachedVideos = loaded
+                localVideos = loaded
             } else {
-                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                localVideos = cached
             }
+        } else {
             permissionLauncher.launch(permissionsToRequest)
         }
     }
 
     val reload: () -> Unit = { refreshKey++ }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    // Search filtering is memoized: it only recomputes when the query or the
+    // video list actually changes, so typing is smooth and cheap.
+    val filteredVideos = remember(localVideos, searchQuery) {
+        if (searchQuery.isBlank()) localVideos
+        else localVideos.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
+    }
+
+    fun openAppSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null)
+        )
+        context.startActivity(intent)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .tabSwipe(onSwipeNext, onSwipePrevious)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -148,24 +194,80 @@ fun HomeScreen(
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
-            IconButton(onClick = { showUrlInput = !showUrlInput }) {
-                Icon(painterResource(id = R.drawable.ic_url), contentDescription = "Add URL", modifier = Modifier.size(28.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = {
+                    if (showSearch) {
+                        showSearch = false
+                        focusManager.clearFocus()
+                    } else {
+                        showSearch = true
+                        showUrlInput = false
+                    }
+                }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_search),
+                        contentDescription = "Search videos",
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                IconButton(onClick = {
+                    if (showUrlInput) {
+                        showUrlInput = false
+                        focusManager.clearFocus()
+                    } else {
+                        showUrlInput = true
+                        showSearch = false
+                    }
+                }) {
+                    Icon(painterResource(id = R.drawable.ic_url), contentDescription = "Add URL", modifier = Modifier.size(28.dp))
+                }
             }
+        }
+
+        AnimatedVisibility(
+            visible = showSearch,
+            enter = fadeIn(animationSpec = tween(260)) + expandVertically(animationSpec = tween(260)),
+            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search videos…") },
+                leadingIcon = {
+                    Icon(painterResource(id = R.drawable.ic_search), contentDescription = null)
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 4.dp)
+            )
         }
         
         AnimatedVisibility(
             visible = showUrlInput,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300), initialOffsetY = { -it }),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300), targetOffsetY = { -it })
+            enter = fadeIn(animationSpec = tween(260)) + expandVertically(animationSpec = tween(260)),
+            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
         ) {
             OutlinedTextField(
                 value = url,
                 onValueChange = { url = it },
                 label = { Text("Enter Video URL") },
                 singleLine = true,
+                shape = RoundedCornerShape(14.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(
-                    onGo = { if (url.isNotEmpty()) onPlayUrl(url) }
+                    onGo = {
+                        if (url.isNotEmpty()) onPlayUrl(url)
+                        focusManager.clearFocus()
+                    }
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -198,13 +300,68 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         if (!hasPermission) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Storage permission required to show local videos.")
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VideoFile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Storage permission required",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Allow access to show your local videos.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { permissionLauncher.launch(permissionsToRequest) },
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Text("Grant Permission")
+                    }
+                    OutlinedButton(
+                        onClick = { openAppSettings() },
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Text("Open Settings")
+                    }
+                }
             }
         } else if (localVideos.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No local videos found.")
-            }
+            EmptyState(
+                icon = Icons.Default.VideoFile,
+                title = "No videos found",
+                subtitle = "Your local videos will appear here once they're detected."
+            )
+        } else if (filteredVideos.isEmpty()) {
+            EmptyState(
+                icon = Icons.Default.Search,
+                title = "No matches",
+                subtitle = "Try a different search term."
+            )
         } else {
             when (viewLayout) {
                 ViewLayout.LIST -> {
@@ -213,7 +370,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(vertical = 4.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(localVideos, key = { it.uri }) { video ->
+                        items(filteredVideos, key = { it.uri }) { video ->
                             VideoListItem(
                                 video = video,
                                 strategy = thumbnailStrategy,
@@ -232,7 +389,7 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(localVideos, key = { it.uri }) { video ->
+                        items(filteredVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
                                 strategy = thumbnailStrategy,
@@ -253,7 +410,7 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(localVideos, key = { it.uri }) { video ->
+                        items(filteredVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
                                 strategy = thumbnailStrategy,
@@ -268,12 +425,28 @@ fun HomeScreen(
                     }
                 }
                 ViewLayout.CINEMA -> {
+                    // Cinema = "featured first": the newest video spans the full
+                    // width as a hero card, the rest fill a 2-column grid below.
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(localVideos, key = { it.uri }) { video ->
+                        if (filteredVideos.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                val video = filteredVideos.first()
+                                VideoThumbnailCard(
+                                    video = video,
+                                    strategy = thumbnailStrategy,
+                                    positionPercent = thumbnailPositionPercent,
+                                    batterySaver = batterySaver,
+                                    loadingIndicatorStyle = loadingIndicatorStyle,
+                                    onClick = { onPlayUrl(video.uri) },
+                                    onChanged = reload
+                                )
+                            }
+                        }
+                        items(filteredVideos.drop(1), key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
                                 strategy = thumbnailStrategy,
@@ -291,6 +464,7 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VideoThumbnailCard(
     video: LocalVideo,
@@ -337,7 +511,10 @@ fun VideoThumbnailCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() },
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true }
+                ),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -392,7 +569,9 @@ fun VideoThumbnailCard(
                     if (video.duration > 0) {
                         DurationBadge(
                             text = formatDurationMillis(video.duration),
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(6.dp)
                         )
                     }
                     if (compact) {
@@ -404,7 +583,7 @@ fun VideoThumbnailCard(
                             color = Color.White,
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
-                                .padding(6.dp)
+                                .padding(start = 6.dp, bottom = 6.dp, end = 56.dp)
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(Color.Black.copy(alpha = 0.55f))
                                 .padding(horizontal = 6.dp, vertical = 3.dp)
@@ -431,12 +610,12 @@ fun VideoThumbnailCard(
                         MetadataRow(video = video)
                     }
                     Box(contentAlignment = Alignment.Center) {
-                        IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(34.dp)) {
+                        IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 Icons.Default.MoreVert,
                                 contentDescription = "Options",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                         menuActions()
@@ -447,99 +626,7 @@ fun VideoThumbnailCard(
     }
 }
 
-suspend fun getVideoThumbnail(
-    context: Context,
-    uri: String,
-    duration: Long,
-    strategy: ThumbnailStrategy = ThumbnailStrategy.HYBRID,
-    positionPercent: Int = 33
-): Bitmap? = withContext(Dispatchers.IO) {
-    // Cache key includes the strategy/position so changing settings refreshes art.
-    val key = "video:$uri:$strategy:$positionPercent"
-    com.ghost.video.data.ThumbnailCache.get(key)?.let { return@withContext it }
-
-    var retriever: MediaMetadataRetriever? = null
-    try {
-        retriever = MediaMetadataRetriever()
-        retriever.setDataSource(context, android.net.Uri.parse(uri))
-
-        val raw = when (strategy) {
-            ThumbnailStrategy.FIRST_FRAME -> {
-                retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            }
-            ThumbnailStrategy.FRAME_AT_POSITION -> {
-                val positionUs = (duration * 1000L * positionPercent) / 100L
-                retriever.getFrameAtTime(positionUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            }
-            ThumbnailStrategy.HYBRID -> {
-                val firstFrame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                if (firstFrame != null && !isMostlySolidColor(firstFrame)) {
-                    firstFrame
-                } else {
-                    val positionUs = (duration * 1000L * positionPercent) / 100L
-                    retriever.getFrameAtTime(positionUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        ?: firstFrame
-                        ?: retriever.getFrameAtTime(-1)
-                }
-            }
-        }
-
-        // Downscale large frames so the grid stays smooth and memory stays low.
-        val scaled = raw?.let { downscaleBitmap(it, 512) }
-        if (scaled != null) com.ghost.video.data.ThumbnailCache.put(key, scaled)
-        scaled
-    } catch (e: Exception) {
-        null
-    } finally {
-        retriever?.release()
-    }
-}
-
-/** Downscale a bitmap so its longest edge is at most [maxEdge] px. */
-private fun downscaleBitmap(src: Bitmap, maxEdge: Int): Bitmap {
-    val w = src.width
-    val h = src.height
-    val longEdge = maxOf(w, h)
-    if (longEdge <= maxEdge) return src
-    val ratio = maxEdge.toFloat() / longEdge.toFloat()
-    val nw = (w * ratio).toInt().coerceAtLeast(1)
-    val nh = (h * ratio).toInt().coerceAtLeast(1)
-    return try {
-        val scaled = Bitmap.createScaledBitmap(src, nw, nh, true)
-        if (scaled != src) src.recycle()
-        scaled
-    } catch (e: Exception) {
-        src
-    }
-}
-
-private fun isMostlySolidColor(bitmap: Bitmap): Boolean {
-    val width = bitmap.width
-    val height = bitmap.height
-    if (width < 2 || height < 2) return false
-
-    val samplePoints = listOf(
-        Pair(width / 4, height / 4),
-        Pair(width * 3 / 4, height / 4),
-        Pair(width / 4, height * 3 / 4),
-        Pair(width * 3 / 4, height * 3 / 4),
-        Pair(width / 2, height / 2)
-    )
-
-    val colors = samplePoints.map { (x, y) -> bitmap.getPixel(x, y) }
-    val firstColor = colors.first()
-
-    val similarCount = colors.count { color ->
-        val rDiff = kotlin.math.abs(android.graphics.Color.red(color) - android.graphics.Color.red(firstColor))
-        val gDiff = kotlin.math.abs(android.graphics.Color.green(color) - android.graphics.Color.green(firstColor))
-        val bDiff = kotlin.math.abs(android.graphics.Color.blue(color) - android.graphics.Color.blue(firstColor))
-        rDiff < 15 && gDiff < 15 && bDiff < 15
-    }
-
-    return similarCount >= 4
-}
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VideoListItem(
     video: LocalVideo,
@@ -583,7 +670,10 @@ fun VideoListItem(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() },
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true }
+                ),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(18.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -671,7 +761,7 @@ fun VideoListItem(
                 Box(contentAlignment = Alignment.Center) {
                     IconButton(
                         onClick = { menuExpanded = true },
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.MoreVert,
@@ -766,12 +856,27 @@ private fun VideoActions(
     val deleteLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) onChanged()
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            Toast.makeText(context, "Video deleted", Toast.LENGTH_SHORT).show()
+            onChanged()
+        }
     }
+
+    var pendingRename by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     val writeLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { }
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            // Write permission granted: apply the rename that was waiting.
+            pendingRename?.let { (uri, finalName) ->
+                applyMediaRename(context, uri, finalName)
+                Toast.makeText(context, "Video renamed", Toast.LENGTH_SHORT).show()
+            }
+            pendingRename = null
+        }
+        onChanged()
+    }
 
     content {
         DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
@@ -825,7 +930,33 @@ private fun VideoActions(
             onDismiss = { showRename = false },
             onConfirm = { newName ->
                 showRename = false
-                renameVideo(context, video, newName, writeLauncher::launch, onChanged)
+                val uri = video.uri
+                // Preserve the original extension (.mp4 etc).
+                val ext = video.name.substringAfterLast('.', "")
+                val finalName = if (ext.isNotEmpty() && !newName.endsWith(".$ext")) "$newName.$ext" else newName
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
+                }
+                try {
+                    val rows = context.contentResolver.update(Uri.parse(uri), values, null, null)
+                    if (rows > 0) {
+                        Toast.makeText(context, "Video renamed", Toast.LENGTH_SHORT).show()
+                        onChanged()
+                    }
+                } catch (e: SecurityException) {
+                    // Android 11+: ask for write access, then re-apply the rename
+                    // in the writeLauncher callback (this retry was the missing
+                    // piece that made rename appear broken).
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try {
+                            pendingRename = uri to finalName
+                            val pi = MediaStore.createWriteRequest(context.contentResolver, listOf(Uri.parse(uri)))
+                            writeLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+                        } catch (_: Exception) {
+                        }
+                    }
+                } catch (_: Exception) {
+                }
             }
         )
     }
@@ -836,7 +967,22 @@ private fun VideoDetailsDialog(video: LocalVideo, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Close",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         },
         title = { Text("Details") },
         text = {
@@ -863,23 +1009,66 @@ private fun DetailRow(label: String, value: String) {
 
 @Composable
 private fun RenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var text by remember { mutableStateOf(cleanVideoName(currentName)) }
+    // Show the FULL file name (including the extension) so the user can see the
+    // ".mp4" etc. The extension is preserved automatically on rename.
+    var text by remember { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) { Text("Rename") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(onClick = onDismiss)
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Cancel",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) })
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Rename",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
         },
         title = { Text("Rename video") },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                label = { Text("New name") }
-            )
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = true,
+                    label = { Text("New name") }
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "The file extension is kept automatically.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     )
 }
@@ -897,6 +1086,7 @@ private fun deleteVideo(
     } else {
         try {
             context.contentResolver.delete(uri, null, null)
+            Toast.makeText(context, "Video deleted", Toast.LENGTH_SHORT).show()
             onChanged()
         } catch (e: Exception) {
             // ignore
@@ -904,42 +1094,16 @@ private fun deleteVideo(
     }
 }
 
-private fun renameVideo(
-    context: Context,
-    video: LocalVideo,
-    newName: String,
-    launch: (IntentSenderRequest) -> Unit,
-    onChanged: () -> Unit
-) {
-    val uri = Uri.parse(video.uri)
-    // Preserve the original extension.
-    val ext = video.name.substringAfterLast('.', "")
-    val finalName = if (ext.isNotEmpty() && !newName.endsWith(".$ext")) "$newName.$ext" else newName
-    val values = ContentValues().apply {
-        put(MediaStore.Video.Media.DISPLAY_NAME, finalName)
-    }
-    try {
-        val rows = context.contentResolver.update(uri, values, null, null)
-        if (rows > 0) onChanged()
-    } catch (e: SecurityException) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            try {
-                val pi = MediaStore.createWriteRequest(context.contentResolver, listOf(uri))
-                launch(IntentSenderRequest.Builder(pi.intentSender).build())
-            } catch (_: Exception) {
-            }
+/** Apply a rename to a MediaStore item once write access is available. */
+private fun applyMediaRename(context: Context, uri: String, finalName: String): Boolean {
+    return try {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
         }
+        context.contentResolver.update(Uri.parse(uri), values, null, null) > 0
     } catch (e: Exception) {
-        // ignore
+        false
     }
-}
-
-/** Build a clean, human-readable subtitle: "14.2 MB · 1080p". */
-private fun buildSubtitle(video: LocalVideo): String {
-    val parts = mutableListOf<String>()
-    if (video.size > 0) parts.add(formatFileSize(video.size))
-    if (video.width > 0 && video.height > 0) parts.add(resolutionLabel(video.width, video.height))
-    return if (parts.isEmpty()) "Video" else parts.joinToString("  ·  ")
 }
 
 /** Strip extension, replace separators with spaces, tidy up common camera prefixes. */
@@ -988,8 +1152,7 @@ fun formatDurationMillis(durationMs: Long): String {
 
 fun checkVideoPermission(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED &&
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
     } else {
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
     }

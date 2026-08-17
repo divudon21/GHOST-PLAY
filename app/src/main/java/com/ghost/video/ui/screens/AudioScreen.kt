@@ -2,24 +2,39 @@ package com.ghost.video.ui.screens
 
 import android.Manifest
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Parcelable
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,9 +42,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.ui.components.EmptyState
+import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.AudioViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,22 +57,45 @@ import kotlinx.parcelize.Parcelize
 @Parcelize
 data class LocalAudio(val id: Long, val name: String, val uri: String, val artist: String?) : Parcelable
 
+// In-memory cache so the audio list survives tab switches without re-querying.
+private var cachedAudios: List<LocalAudio>? = null
+
 private const val AUDIO_PAGE_SIZE = 60
 
 @Composable
-fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
+fun AudioScreen(
+    viewModel: AudioViewModel = viewModel(),
+    onSwipeNext: () -> Unit = {},
+    onSwipePrevious: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var localAudios by remember { mutableStateOf<List<LocalAudio>>(emptyList()) }
+    val currentAudio by viewModel.currentAudio.collectAsState()
+    var localAudios by remember { mutableStateOf(cachedAudios ?: emptyList()) }
     var hasPermission by remember { mutableStateOf(checkAudioPermission(context)) }
     var isLoadingPage by remember { mutableStateOf(false) }
     var hasMorePages by remember { mutableStateOf(true) }
     var nextOffset by remember { mutableIntStateOf(0) }
+    var refreshKey by remember { mutableIntStateOf(0) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasPermission = isGranted
+    }
+
+    val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    fun openAppSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null)
+        )
+        context.startActivity(intent)
     }
 
     fun loadNextPage() {
@@ -71,35 +112,100 @@ fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
             nextOffset = offsetToLoad + page.size
             hasMorePages = page.size == AUDIO_PAGE_SIZE
             viewModel.setPlaylist(localAudios)
+            cachedAudios = localAudios
             isLoadingPage = false
         }
     }
 
-    LaunchedEffect(hasPermission) {
+    LaunchedEffect(hasPermission, refreshKey) {
         if (hasPermission) {
-            localAudios = emptyList()
-            nextOffset = 0
-            hasMorePages = true
-            isLoadingPage = false
-            loadNextPage()
-        } else {
-            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_AUDIO
+            val cached = cachedAudios
+            if (refreshKey > 0) {
+                // A rename/delete happened: full re-scan from page one.
+                cachedAudios = null
+                localAudios = emptyList()
+                nextOffset = 0
+                hasMorePages = true
+                isLoadingPage = false
+                loadNextPage()
+            } else if (cached == null) {
+                localAudios = emptyList()
+                nextOffset = 0
+                hasMorePages = true
+                isLoadingPage = false
+                loadNextPage()
             } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
+                // Returning to the tab: restore from cache, no re-query.
+                localAudios = cached
+                nextOffset = cached.size
+                hasMorePages = cached.size % AUDIO_PAGE_SIZE == 0
+                viewModel.setPlaylist(cached)
             }
-            permissionLauncher.launch(permission)
+        } else {
+            permissionLauncher.launch(permissionToRequest)
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .tabSwipe(onSwipeNext, onSwipePrevious)
+    ) {
         Text("Local Audio Files", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(16.dp))
 
         when {
             !hasPermission -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Storage permission required to show local audio.")
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(48.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Audiotrack,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Storage permission required",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Allow access to play your local audio.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { permissionLauncher.launch(permissionToRequest) },
+                            modifier = Modifier.weight(1f).height(48.dp)
+                        ) {
+                            Text("Grant Permission")
+                        }
+                        OutlinedButton(
+                            onClick = { openAppSettings() },
+                            modifier = Modifier.weight(1f).height(48.dp)
+                        ) {
+                            Text("Open Settings")
+                        }
+                    }
                 }
             }
 
@@ -110,9 +216,11 @@ fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
             }
 
             localAudios.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No local audio files found.")
-                }
+                EmptyState(
+                    icon = Icons.Default.Audiotrack,
+                    title = "No audio files found",
+                    subtitle = "Your local music will appear here."
+                )
             }
 
             else -> {
@@ -123,7 +231,9 @@ fun AudioScreen(viewModel: AudioViewModel = viewModel()) {
                     items(localAudios, key = { it.uri }) { audio ->
                         AudioListItem(
                             audio = audio,
-                            onClick = { viewModel.playAudio(context, audio) }
+                            isPlaying = currentAudio?.uri == audio.uri,
+                            onClick = { viewModel.playAudio(context, audio) },
+                            onChanged = { refreshKey++ }
                         )
                     }
 
@@ -154,12 +264,6 @@ fun checkAudioPermission(context: Context): Boolean {
     }
     return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 }
-
-suspend fun loadLocalAudios(context: Context): List<LocalAudio> = loadLocalAudiosPage(
-    context = context,
-    limit = Int.MAX_VALUE,
-    offset = 0
-)
 
 suspend fun loadLocalAudiosPage(
     context: Context,
@@ -220,9 +324,47 @@ suspend fun loadLocalAudiosPage(
     audios
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AudioListItem(audio: LocalAudio, onClick: () -> Unit) {
+fun AudioListItem(
+    audio: LocalAudio,
+    isPlaying: Boolean = false,
+    onClick: () -> Unit,
+    onChanged: () -> Unit = {}
+) {
     val context = LocalContext.current
+    val containerColor by animateColorAsState(
+        targetValue = if (isPlaying) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant,
+        label = "audioItemContainer"
+    )
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
+    var showRename by remember { mutableStateOf(false) }
+    var pendingRename by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val deleteLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            Toast.makeText(context, "Audio deleted", Toast.LENGTH_SHORT).show()
+            onChanged()
+        }
+    }
+
+    val writeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            pendingRename?.let { (uri, finalName) ->
+                applyAudioRename(context, uri, finalName)
+                Toast.makeText(context, "Audio renamed", Toast.LENGTH_SHORT).show()
+            }
+            pendingRename = null
+        }
+        onChanged()
+    }
+
     // Seed from cache so returning items show art instantly (no re-decode jitter).
     val cacheKey = "audio:${audio.uri}"
     val cached = remember(cacheKey) { com.ghost.video.data.ThumbnailCache.get(cacheKey) }
@@ -237,52 +379,315 @@ fun AudioListItem(audio: LocalAudio, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            ),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Box {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    if (thumbnailBitmap != null) {
+                        Image(
+                            bitmap = thumbnailBitmap!!.asImageBitmap(),
+                            contentDescription = "Album Art",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Audiotrack,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = audio.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        color = if (isPlaying) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (!audio.artist.isNullOrEmpty() && audio.artist != "<unknown>") {
+                        Text(
+                            text = audio.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isPlaying) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (isPlaying) {
+                    Icon(
+                        imageVector = Icons.Rounded.GraphicEq,
+                        contentDescription = "Now playing",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Playing",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Long-press context menu: same options as the video 3-dot menu.
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Play") },
+                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                    onClick = { menuExpanded = false; onClick() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "audio/*"
+                            putExtra(Intent.EXTRA_STREAM, Uri.parse(audio.uri))
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share audio"))
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                    onClick = { menuExpanded = false; showRename = true }
+                )
+                DropdownMenuItem(
+                    text = { Text("Details") },
+                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                    onClick = { menuExpanded = false; showDetails = true }
+                )
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    onClick = {
+                        menuExpanded = false
+                        deleteAudio(context, audio, deleteLauncher::launch, onChanged)
+                    }
+                )
+            }
+        }
+    }
+
+    if (showDetails) {
+        AudioDetailsDialog(audio = audio, onDismiss = { showDetails = false })
+    }
+
+    if (showRename) {
+        AudioRenameDialog(
+            currentName = audio.name,
+            onDismiss = { showRename = false },
+            onConfirm = { newName ->
+                showRename = false
+                val uri = audio.uri
+                val ext = audio.name.substringAfterLast('.', "")
+                val finalName = if (ext.isNotEmpty() && !newName.endsWith(".$ext")) "$newName.$ext" else newName
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
+                }
+                try {
+                    val rows = context.contentResolver.update(Uri.parse(uri), values, null, null)
+                    if (rows > 0) {
+                        Toast.makeText(context, "Audio renamed", Toast.LENGTH_SHORT).show()
+                        onChanged()
+                    }
+                } catch (e: SecurityException) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try {
+                            pendingRename = uri to finalName
+                            val pi = MediaStore.createWriteRequest(context.contentResolver, listOf(Uri.parse(uri)))
+                            writeLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+                        } catch (_: Exception) {
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        )
+    }
+}
+
+/** Delete a local audio file (system confirm dialog on Android 11+). */
+private fun deleteAudio(
+    context: Context,
+    audio: LocalAudio,
+    launch: (IntentSenderRequest) -> Unit,
+    onChanged: () -> Unit
+) {
+    val uri = Uri.parse(audio.uri)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val pi = MediaStore.createDeleteRequest(context.contentResolver, listOf(uri))
+        launch(IntentSenderRequest.Builder(pi.intentSender).build())
+    } else {
+        try {
+            context.contentResolver.delete(uri, null, null)
+            Toast.makeText(context, "Audio deleted", Toast.LENGTH_SHORT).show()
+            onChanged()
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+}
+
+/** Apply an audio rename to MediaStore once write access is available. */
+private fun applyAudioRename(context: Context, uri: String, finalName: String): Boolean {
+    return try {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, finalName)
+        }
+        context.contentResolver.update(Uri.parse(uri), values, null, null) > 0
+    } catch (e: Exception) {
+        false
+    }
+}
+
+@Composable
+private fun AudioDetailsDialog(audio: LocalAudio, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (thumbnailBitmap != null) {
-                    Image(
-                        bitmap = thumbnailBitmap!!.asImageBitmap(),
-                        contentDescription = "Album Art",
-                        modifier = Modifier.fillMaxSize()
+                Text(
+                    text = "Close",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        },
+        title = { Text("Details") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column {
+                    Text(
+                        text = "Name",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Audiotrack,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(28.dp)
+                    Text(
+                        text = audio.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                if (!audio.artist.isNullOrEmpty() && audio.artist != "<unknown>") {
+                    Column {
+                        Text(
+                            text = "Artist",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = audio.artist!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
             }
+        }
+    )
+}
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(audio.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                if (!audio.artist.isNullOrEmpty() && audio.artist != "<unknown>") {
-                    Text(audio.artist, style = MaterialTheme.typography.bodySmall)
+@Composable
+private fun AudioRenameDialog(currentName: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var text by remember { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(onClick = onDismiss)
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Cancel",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) })
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Rename",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
             }
+        },
+        title = { Text("Rename audio") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = true,
+                    label = { Text("New name") }
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "The file extension is kept automatically.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-    }
+    )
 }
+
 
 suspend fun loadAudioThumbnail(context: Context, uri: String): Bitmap? = withContext(Dispatchers.IO) {
     // Return cached art instantly if we already decoded it.

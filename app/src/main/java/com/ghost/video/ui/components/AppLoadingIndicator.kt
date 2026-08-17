@@ -2,6 +2,7 @@ package com.ghost.video.ui.components
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.LoadingIndicatorDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,12 +24,23 @@ fun AppLoadingIndicator(
     shapeColor: Color = Color.Unspecified,
     containerColor: Color = Color.Unspecified
 ) {
-    @Suppress("UNUSED_VARIABLE")
-    val ignoredShapeColor = shapeColor
-    @Suppress("UNUSED_VARIABLE")
-    val ignoredContainerColor = containerColor
+    // Map shapeColor -> the spinning shape, containerColor -> the container
+    // behind it. When unspecified, fall back to the theme defaults so existing
+    // callers that pass no colors keep the standard look.
+    val resolvedIndicator = if (shapeColor == Color.Unspecified) {
+        LoadingIndicatorDefaults.containedIndicatorColor
+    } else {
+        shapeColor
+    }
+    val resolvedContainer = if (containerColor == Color.Unspecified) {
+        LoadingIndicatorDefaults.containedContainerColor
+    } else {
+        containerColor
+    }
 
     ContainedLoadingIndicator(
-        modifier = modifier.size(size)
+        modifier = modifier.size(size),
+        indicatorColor = resolvedIndicator,
+        containerColor = resolvedContainer,
     )
 }

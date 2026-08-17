@@ -26,14 +26,17 @@ import androidx.compose.material.icons.rounded.StayCurrentLandscape
 import androidx.compose.material.icons.rounded.StayCurrentPortrait
 import androidx.compose.material.icons.rounded.ScreenLockRotation
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +55,7 @@ fun PlayerSettingsScreen(
     val playbackSpeed by viewModel.defaultPlaybackSpeed.collectAsState()
     val autoplay by viewModel.autoplay.collectAsState()
     val pipMode by viewModel.pipMode.collectAsState()
+    val autoPipMode by viewModel.autoPipMode.collectAsState()
     val backgroundPlay by viewModel.backgroundPlay.collectAsState()
     val rememberBrightness by viewModel.rememberBrightness.collectAsState()
     val rememberSelections by viewModel.rememberSelections.collectAsState()
@@ -111,10 +115,18 @@ fun PlayerSettingsScreen(
             item {
                 ToggleCard(
                     title = "Picture in Picture Mode",
-                    subtitle = "Switch to mini player on Home",
+                    subtitle = "Show the Picture-in-Picture button in the player",
                     icon = Icons.Rounded.PictureInPictureAlt,
                     checked = pipMode,
                     onCheckedChange = { viewModel.setPipMode(it) }
+                )
+
+                ToggleCard(
+                    title = "Auto Picture in Picture Mode",
+                    subtitle = "Automatically enter Picture-in-Picture when you leave the app",
+                    icon = Icons.Rounded.PictureInPictureAlt,
+                    checked = autoPipMode,
+                    onCheckedChange = { viewModel.setAutoPipMode(it) }
                 )
             }
 
@@ -250,6 +262,12 @@ fun SpeedCard(
     onSpeedChange: (Float) -> Unit
 ) {
     val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+    // Only persist when the user releases the slider, so a casual drag can't
+    // accidentally leave playback at an unwanted speed (e.g. 0.5x).
+    var isDragging by remember { mutableStateOf(false) }
+    var pendingSpeed by remember { mutableFloatStateOf(currentSpeed) }
+    val displayedSpeed = if (isDragging) pendingSpeed else currentSpeed
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -272,15 +290,30 @@ fun SpeedCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "%.1f×".format(currentSpeed),
+                    text = "%.1f×".format(displayedSpeed),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                 )
             }
+            // One-tap reset back to normal 1x speed.
+            IconButton(onClick = { onSpeedChange(1.0f) }) {
+                Icon(
+                    imageVector = Icons.Rounded.RestartAlt,
+                    contentDescription = "Reset to 1x speed",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Slider(
-            value = currentSpeed,
-            onValueChange = onSpeedChange,
+            value = displayedSpeed,
+            onValueChange = {
+                isDragging = true
+                pendingSpeed = it
+            },
+            onValueChangeFinished = {
+                onSpeedChange(pendingSpeed)
+                isDragging = false
+            },
             valueRange = 0.25f..3.0f,
             steps = 10,
             modifier = Modifier
@@ -316,42 +349,6 @@ fun ClickableCard(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    )
-}
-
-@Composable
-fun OrientationDialog(
-    currentOrientation: OrientationPreference,
-    onOrientationSelected: (OrientationPreference) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val options = listOf(
-        OrientationPreference.AUTO to "Auto",
-        OrientationPreference.LANDSCAPE to "Landscape",
-        OrientationPreference.PORTRAIT to "Portrait",
-        OrientationPreference.SENSOR_LANDSCAPE to "Sensor Landscape"
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Player screen orientation") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                options.forEach { (pref, label) ->
-                    OrientationOptionRow(
-                        label = label,
-                        description = orientationDescription(pref),
-                        isSelected = currentOrientation == pref,
-                        onClick = { onOrientationSelected(pref) }
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
         }
     )
 }

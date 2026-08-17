@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,18 @@ fun SmoothSwitch(
     val padding = 4.dp
 
     val cs = MaterialTheme.colorScheme
+
+    // Glow: a soft, draw-phase shadow behind the active pill. Only animates one
+    // value (elevation) — no recomposition storm, zero layout cost.
+    val glowEnabled = LocalGlowEffect.current
+    val glowElevation by animateDpAsState(
+        targetValue = if (glowEnabled && checked && enabled) 10.dp else 0.dp,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioNoBouncy
+        ),
+        label = "switchGlow"
+    )
 
     // One cheap spring for the slide.
     val thumbOffset by animateDpAsState(
@@ -111,6 +124,12 @@ fun SmoothSwitch(
     Box(
         modifier = modifier
             .size(width = trackWidth, height = trackHeight)
+            .shadow(
+                elevation = glowElevation,
+                shape = CircleShape,
+                ambientColor = cs.primary,
+                spotColor = cs.primary
+            )
             .clip(CircleShape)
             .background(trackColor, CircleShape)
             .border(2.dp, borderColor, CircleShape)

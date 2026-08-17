@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -64,7 +65,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
-import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.ui.theme.paletteScheme
@@ -86,6 +86,7 @@ fun AppearanceSettingsScreen(
     val currentLayout by viewModel.viewLayout.collectAsState()
     val currentDialogTheme by viewModel.dialogThemePreference.collectAsState()
     val highContrastDark by viewModel.highContrastDark.collectAsState()
+    val glowEffect by viewModel.glowEffect.collectAsState()
     val loadingIndicatorStyle by viewModel.loadingIndicatorStyle.collectAsState()
     val systemInDark = isSystemInDarkTheme()
     var showPalettePicker by remember { mutableStateOf(false) }
@@ -143,7 +144,10 @@ fun AppearanceSettingsScreen(
             TextStyleOption(AppTextStyle.NUNITO, "Nunito", "Soft and friendly"),
             TextStyleOption(AppTextStyle.LORA, "Lora", "Elegant serif"),
             TextStyleOption(AppTextStyle.JETBRAINS_MONO, "JetBrains Mono", "Technical monospace"),
-            TextStyleOption(AppTextStyle.INTER, "Inter", "Sharp screen readability")
+            TextStyleOption(AppTextStyle.INTER, "Inter", "Sharp screen readability"),
+            TextStyleOption(AppTextStyle.CABARET, "Cabaret", "Decorative display"),
+            TextStyleOption(AppTextStyle.GRAZING_MACE, "Grazing Mace", "Distinctive display"),
+            TextStyleOption(AppTextStyle.ABRAHAM_STAMP, "Abraham Stamp", "Bold stamped look")
         )
     }
     val selectedTextStyle = textStyles.firstOrNull { it.style == currentTextStyle }
@@ -156,7 +160,7 @@ fun AppearanceSettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -189,6 +193,14 @@ fun AppearanceSettingsScreen(
                 BoldTextToggleCard(
                     checked = boldText,
                     onCheckedChange = viewModel::setBoldText
+                )
+            }
+
+            // Glow effect — adds a soft glow to every toggle in the app.
+            item {
+                GlowEffectToggleCard(
+                    checked = glowEffect,
+                    onCheckedChange = viewModel::setGlowEffect
                 )
             }
 
@@ -606,6 +618,25 @@ private fun BoldTextToggleCard(
     )
 }
 
+@Composable
+private fun GlowEffectToggleCard(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    MinimalSettingRow(
+        title = "Glow effect",
+        subtitle = "Add a soft glow to all toggles",
+        leadingIcon = Icons.Rounded.AutoAwesome,
+        onClick = { onCheckedChange(!checked) },
+        trailing = {
+            com.ghost.video.ui.components.SmoothSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        }
+    )
+}
+
 data class TextStyleOption(
     val style: AppTextStyle,
     val title: String,
@@ -617,6 +648,9 @@ private val NunitoPreviewFamily = FontFamily(Font(R.font.nunito_variable))
 private val LoraPreviewFamily = FontFamily(Font(R.font.lora_variable))
 private val JetBrainsPreviewFamily = FontFamily(Font(R.font.jetbrains_mono_variable))
 private val InterPreviewFamily = FontFamily(Font(R.font.inter_variable))
+private val CabaretPreviewFamily = FontFamily(Font(R.font.cabaret))
+private val GrazingMacePreviewFamily = FontFamily(Font(R.font.grazing_mace))
+private val AbrahamStampPreviewFamily = FontFamily(Font(R.font.abraham_stamp))
 
 private fun previewFontFamily(style: AppTextStyle): FontFamily = when (style) {
     AppTextStyle.DEFAULT -> FontFamily.Default
@@ -625,6 +659,9 @@ private fun previewFontFamily(style: AppTextStyle): FontFamily = when (style) {
     AppTextStyle.LORA -> LoraPreviewFamily
     AppTextStyle.JETBRAINS_MONO -> JetBrainsPreviewFamily
     AppTextStyle.INTER -> InterPreviewFamily
+    AppTextStyle.CABARET -> CabaretPreviewFamily
+    AppTextStyle.GRAZING_MACE -> GrazingMacePreviewFamily
+    AppTextStyle.ABRAHAM_STAMP -> AbrahamStampPreviewFamily
 }
 
 @Composable
@@ -699,7 +736,24 @@ fun TextStylePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            // One clean rounded box for the Cancel action, so the bottom of the
+            // dialog looks intentional instead of a bare text button.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
     )
 }
@@ -766,8 +820,21 @@ fun PalettePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             }
         }
     )
@@ -883,8 +950,21 @@ fun ViewLayoutPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             }
         }
     )
@@ -1126,8 +1206,21 @@ fun ThemePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             }
         }
     )
@@ -1203,25 +1296,21 @@ fun ThemePreviewCard(
         ThemePreference.SYSTEM -> Color(0xFFF3EDF7)
         ThemePreference.LIGHT -> Color(0xFFFDF8FD)
         ThemePreference.DARK -> Color(0xFF141218)
-        ThemePreference.AMOLED -> Color(0xFF000000)
     }
     val previewSurface = when (option.preference) {
         ThemePreference.SYSTEM -> Color(0xFFFFFFFF)
         ThemePreference.LIGHT -> Color(0xFFFFFFFF)
         ThemePreference.DARK -> Color(0xFF211F26)
-        ThemePreference.AMOLED -> Color(0xFF121212)
     }
     val previewPrimary = when (option.preference) {
         ThemePreference.SYSTEM -> Color(0xFF6750A4)
         ThemePreference.LIGHT -> Color(0xFF6650A4)
         ThemePreference.DARK -> Color(0xFFD0BCFF)
-        ThemePreference.AMOLED -> Color(0xFFD0BCFF)
     }
     val previewText = when (option.preference) {
         ThemePreference.SYSTEM -> Color(0xFF1D1B20)
         ThemePreference.LIGHT -> Color(0xFF1D1B20)
         ThemePreference.DARK -> Color(0xFFE6E0E9)
-        ThemePreference.AMOLED -> Color(0xFFE6E0E9)
     }
 
     val borderColor by animateColorAsState(
@@ -1427,8 +1516,21 @@ fun DialogThemePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
             }
         }
     )

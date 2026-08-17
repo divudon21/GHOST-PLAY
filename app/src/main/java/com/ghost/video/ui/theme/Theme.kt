@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import com.ghost.video.R
-import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.ThemePreference
@@ -612,7 +611,7 @@ fun paletteScheme(palette: AppPalette, isDark: Boolean): androidx.compose.materi
     }
     val backgroundWash = base.primaryContainer.copy(alpha = if (isDark) 0.12f else 0.075f)
         .compositeOver(base.background)
-    val cardWash = base.primaryContainer.copy(alpha = if (isDark) 0.34f else 0.20f)
+    val cardWash = base.primaryContainer.copy(alpha = if (isDark) 0.44f else 0.20f)
         .compositeOver(base.surface)
     return base.copy(
         background = backgroundWash,
@@ -711,36 +710,20 @@ private val DefaultAppTypography = Typography()
 // Bundled OFL fonts from the Google Fonts GitHub repository. Using packaged
 // files instead of generic Android family aliases makes every option visibly
 // different and consistent on every supported device.
-private val ManropeFontFamily = FontFamily(
-    Font(R.font.manrope_variable, FontWeight.Normal),
-    Font(R.font.manrope_variable, FontWeight.Medium),
-    Font(R.font.manrope_variable, FontWeight.SemiBold),
-    Font(R.font.manrope_variable, FontWeight.Bold)
-)
-private val NunitoFontFamily = FontFamily(
-    Font(R.font.nunito_variable, FontWeight.Normal),
-    Font(R.font.nunito_variable, FontWeight.Medium),
-    Font(R.font.nunito_variable, FontWeight.SemiBold),
-    Font(R.font.nunito_variable, FontWeight.Bold)
-)
-private val LoraFontFamily = FontFamily(
-    Font(R.font.lora_variable, FontWeight.Normal),
-    Font(R.font.lora_variable, FontWeight.Medium),
-    Font(R.font.lora_variable, FontWeight.SemiBold),
-    Font(R.font.lora_variable, FontWeight.Bold)
-)
-private val JetBrainsMonoFontFamily = FontFamily(
-    Font(R.font.jetbrains_mono_variable, FontWeight.Normal),
-    Font(R.font.jetbrains_mono_variable, FontWeight.Medium),
-    Font(R.font.jetbrains_mono_variable, FontWeight.SemiBold),
-    Font(R.font.jetbrains_mono_variable, FontWeight.Bold)
-)
-private val InterFontFamily = FontFamily(
-    Font(R.font.inter_variable, FontWeight.Normal),
-    Font(R.font.inter_variable, FontWeight.Medium),
-    Font(R.font.inter_variable, FontWeight.SemiBold),
-    Font(R.font.inter_variable, FontWeight.Bold)
-)
+// Each bundled font is a VARIABLE font. Registering the same file four times
+// (one entry per weight) did NOT produce a real bold: Android loads the variable
+// font's default instance for every declared weight, so the Bold Text toggle only
+// visibly worked for the system Default style. Registering a single entry instead
+// lets Compose apply synthetic bold for FontWeight.Bold, so Bold Text now works
+// with every text style (Manrope / Nunito / Lora / JetBrains Mono / Inter).
+private val ManropeFontFamily = FontFamily(Font(R.font.manrope_variable))
+private val NunitoFontFamily = FontFamily(Font(R.font.nunito_variable))
+private val LoraFontFamily = FontFamily(Font(R.font.lora_variable))
+private val JetBrainsMonoFontFamily = FontFamily(Font(R.font.jetbrains_mono_variable))
+private val InterFontFamily = FontFamily(Font(R.font.inter_variable))
+private val CabaretFontFamily = FontFamily(Font(R.font.cabaret))
+private val GrazingMaceFontFamily = FontFamily(Font(R.font.grazing_mace))
+private val AbrahamStampFontFamily = FontFamily(Font(R.font.abraham_stamp))
 
 private fun typographyWithFamily(fontFamily: FontFamily): Typography {
     val base = DefaultAppTypography
@@ -769,6 +752,9 @@ private val NunitoAppTypography = typographyWithFamily(NunitoFontFamily)
 private val LoraAppTypography = typographyWithFamily(LoraFontFamily)
 private val JetBrainsMonoAppTypography = typographyWithFamily(JetBrainsMonoFontFamily)
 private val InterAppTypography = typographyWithFamily(InterFontFamily)
+private val CabaretAppTypography = typographyWithFamily(CabaretFontFamily)
+private val GrazingMaceAppTypography = typographyWithFamily(GrazingMaceFontFamily)
+private val AbrahamStampAppTypography = typographyWithFamily(AbrahamStampFontFamily)
 
 private fun boldTypography(base: Typography): Typography {
     fun TextStyle.bold() = copy(fontWeight = FontWeight.Bold)
@@ -798,6 +784,9 @@ private val NunitoBoldTypography = boldTypography(NunitoAppTypography)
 private val LoraBoldTypography = boldTypography(LoraAppTypography)
 private val JetBrainsMonoBoldTypography = boldTypography(JetBrainsMonoAppTypography)
 private val InterBoldTypography = boldTypography(InterAppTypography)
+private val CabaretBoldTypography = boldTypography(CabaretAppTypography)
+private val GrazingMaceBoldTypography = boldTypography(GrazingMaceAppTypography)
+private val AbrahamStampBoldTypography = boldTypography(AbrahamStampAppTypography)
 
 @Composable
 fun AgonAppTheme(
@@ -812,12 +801,6 @@ fun AgonAppTheme(
 
     val darkScheme = paletteScheme(palette, isDark = true)
     val lightScheme = paletteScheme(palette, isDark = false)
-
-    val amoledScheme = darkScheme.copy(
-        background = Color.Black,
-        surface = Color.Black,
-        surfaceVariant = Color(0xFF121212)
-    )
 
     // High contrast variant for DARK theme
     val highContrastDarkScheme = darkScheme.copy(
@@ -834,7 +817,6 @@ fun AgonAppTheme(
     val colorScheme = when (themePreference) {
         ThemePreference.LIGHT -> lightScheme
         ThemePreference.DARK -> if (highContrastDark) highContrastDarkScheme else darkScheme
-        ThemePreference.AMOLED -> amoledScheme
         ThemePreference.SYSTEM -> {
             when {
                 isSystemDark && highContrastDark -> highContrastDarkScheme
@@ -851,6 +833,9 @@ fun AgonAppTheme(
         AppTextStyle.LORA -> if (boldText) LoraBoldTypography else LoraAppTypography
         AppTextStyle.JETBRAINS_MONO -> if (boldText) JetBrainsMonoBoldTypography else JetBrainsMonoAppTypography
         AppTextStyle.INTER -> if (boldText) InterBoldTypography else InterAppTypography
+        AppTextStyle.CABARET -> if (boldText) CabaretBoldTypography else CabaretAppTypography
+        AppTextStyle.GRAZING_MACE -> if (boldText) GrazingMaceBoldTypography else GrazingMaceAppTypography
+        AppTextStyle.ABRAHAM_STAMP -> if (boldText) AbrahamStampBoldTypography else AbrahamStampAppTypography
     }
 
     MaterialTheme(

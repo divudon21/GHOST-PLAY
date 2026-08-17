@@ -2,6 +2,7 @@ package com.ghost.video.ui.screens
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -24,16 +25,23 @@ import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.Rectangle
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.R
 import com.ghost.video.data.SubtitleFont
 import com.ghost.video.viewmodel.SettingsViewModel
 
@@ -50,13 +58,6 @@ fun SubtitleSettingsScreen(
     val subtitleBackground by viewModel.subtitleBackground.collectAsState()
     val subtitleEmbeddedStyles by viewModel.subtitleEmbeddedStyles.collectAsState()
     val systemCaptionStyle by viewModel.systemCaptionStyle.collectAsState()
-
-    val fontLabel = when (currentFont) {
-        SubtitleFont.DEFAULT -> "Default"
-        SubtitleFont.MONOSPACE -> "Monospace"
-        SubtitleFont.SANS_SERIF -> "Sans Serif"
-        SubtitleFont.SERIF -> "Serif"
-    }
 
     Scaffold(
         topBar = {
@@ -104,12 +105,22 @@ fun SubtitleSettingsScreen(
                     titleIcon = Icons.Rounded.FontDownload,
                     options = listOf(
                         CapsuleSwitcherOption("Default", Icons.Rounded.TextFields),
-                        CapsuleSwitcherOption("Mono", Icons.Rounded.TextFields),
-                        CapsuleSwitcherOption("Sans", Icons.Rounded.TextRotationNone),
-                        CapsuleSwitcherOption("Serif", Icons.Rounded.Title)
+                        CapsuleSwitcherOption("Lora", Icons.Rounded.Title),
+                        CapsuleSwitcherOption("JetBrains", Icons.Rounded.TextRotationNone),
+                        CapsuleSwitcherOption("Nunito", Icons.Rounded.TextFields)
                     ),
                     selectedIndex = currentFont.ordinal,
                     onSelected = { viewModel.setSubtitleFont(SubtitleFont.entries[it]) }
+                )
+            }
+
+            // Live preview (expandable): reflects font, bold, size and background.
+            item {
+                SubtitlePreviewCard(
+                    font = currentFont,
+                    bold = subtitleBold,
+                    size = subtitleSize,
+                    background = subtitleBackground
                 )
             }
 
@@ -211,46 +222,6 @@ fun SubtitleSettingsScreen(
     }
 
 @Composable
-fun FontOptionRow(
-    font: SubtitleFont,
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val fontFamily = when (font) {
-        SubtitleFont.MONOSPACE -> FontFamily.Monospace
-        SubtitleFont.SANS_SERIF -> FontFamily.SansSerif
-        SubtitleFont.SERIF -> FontFamily.Serif
-        SubtitleFont.DEFAULT -> FontFamily.Default
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // The font name rendered in its own typeface — a clean live preview.
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            fontFamily = fontFamily,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Rounded.Check,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-@Composable
 fun SettingsToggleCard(
     title: String,
     subtitle: String,
@@ -343,4 +314,101 @@ fun SettingsClickableCard(
         }
         HorizontalDivider(thickness = 0.6.dp, color = lineColor)
     }
+}
+
+/**
+ * Expandable live preview that mirrors the current subtitle settings
+ * (font, bold, size, background) so the user sees the result instantly.
+ */
+@Composable
+private fun SubtitlePreviewCard(
+    font: SubtitleFont,
+    bold: Boolean,
+    size: Int,
+    background: Boolean
+) {
+    var expanded by remember { mutableStateOf(true) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ClosedCaption,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Live preview",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "See how subtitles look",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // A dark "video" backdrop so the white preview text is always
+                    // readable, regardless of the app theme.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF111111))
+                            .padding(14.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "Now playing…",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Aa Bb Cc 123 — Sample subtitle",
+                                fontFamily = subtitlePreviewFontFamily(font),
+                                fontSize = size.sp,
+                                lineHeight = (size * 1.3f).sp,
+                                fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+                                color = Color.White,
+                                modifier = if (background) {
+                                    Modifier.background(Color.Black).padding(horizontal = 4.dp, vertical = 2.dp)
+                                } else {
+                                    Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun subtitlePreviewFontFamily(font: SubtitleFont): FontFamily = when (font) {
+    SubtitleFont.DEFAULT -> FontFamily.Default
+    SubtitleFont.LORA -> FontFamily(Font(R.font.lora_variable))
+    SubtitleFont.JETBRAINS_MONO -> FontFamily(Font(R.font.jetbrains_mono_variable))
+    SubtitleFont.NUNITO -> FontFamily(Font(R.font.nunito_variable))
 }

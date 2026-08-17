@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.ghost.video.R
+import com.ghost.video.SharedPlayer
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -52,6 +53,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -77,6 +79,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ghost.video.data.DecoderPriority
 import com.ghost.video.data.DialogThemePreference
+import com.ghost.video.data.OrientationPreference
 import com.ghost.video.data.SettingsRepository
 import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
@@ -134,6 +137,11 @@ fun PlayerScreen(url: String) {
     val loadingIndicatorStyle by settingsRepository.loadingIndicatorStyle.collectAsState(
         initial = com.ghost.video.data.LoadingIndicatorStyle.ROUNDED_POLYGON
     )
+    val pipMode by settingsRepository.pipMode.collectAsState(initial = true)
+    val autoPipMode by settingsRepository.autoPipMode.collectAsState(initial = false)
+    val backgroundPlay by settingsRepository.backgroundPlay.collectAsState(initial = false)
+    val playerOrientation by settingsRepository.playerOrientation.collectAsState(initial = OrientationPreference.AUTO)
+    val systemCaptionStyle by settingsRepository.systemCaptionStyle.collectAsState(initial = false)
 
     // Immersive Mode
     DisposableEffect(Unit) {
@@ -158,8 +166,6 @@ fun PlayerScreen(url: String) {
                 or View.SYSTEM_UI_FLAG_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             )
-            
-            activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
         onDispose {
             activity?.window?.let { window ->
@@ -174,6 +180,45 @@ fun PlayerScreen(url: String) {
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
                 
                 activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+    }
+
+    // Respect the Screen Orientation setting (Auto / Landscape / Portrait / Sensor).
+    LaunchedEffect(playerOrientation) {
+        val requested = when (playerOrientation) {
+            OrientationPreference.AUTO -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            OrientationPreference.LANDSCAPE -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            OrientationPreference.PORTRAIT -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            OrientationPreference.SENSOR_LANDSCAPE -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        activity?.requestedOrientation = requested
+    }
+
+    // Remember brightness: restore the saved level on open and, on exit, persist
+    // the current level before handing brightness back to the system.
+    DisposableEffect(Unit) {
+        coroutineScope.launch {
+            if (settingsRepository.rememberBrightness.first()) {
+                val saved = settingsRepository.getBrightness().first()
+                if (saved in 0f..1f) {
+                    activity?.window?.let { w ->
+                        w.attributes = w.attributes.apply { screenBrightness = saved }
+                    }
+                }
+            }
+        }
+        onDispose {
+            coroutineScope.launch {
+                if (settingsRepository.rememberBrightness.first()) {
+                    val current = activity?.window?.attributes?.screenBrightness ?: -1f
+                    if (current in 0f..1f) settingsRepository.saveBrightness(current)
+                }
+            }
+            activity?.window?.let { w ->
+                w.attributes = w.attributes.apply {
+                    screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                }
             }
         }
     }
@@ -295,76 +340,117 @@ fun PlayerScreen(url: String) {
                 setMediaItem(MediaItem.fromUri(url))
                 
                 coroutineScope.launch {
+                    val resumePlayback = settingsRepository.resumePlayback.first()
+                    val rememberSelections = settingsRepository.rememberSelections.first()
                     val savedPosition = settingsRepository.getPlaybackPosition(url).first()
                     val savedAudioId = settingsRepository.getAudioTrack(url).first()
                     val savedTextId = settingsRepository.getTextTrack(url).first()
-                    
-                    if (savedPosition > 0) {
+
+                    if (resumePlayback && savedPosition > 0) {
                         seekTo(savedPosition)
                     }
-                    
-                    addListener(object : Player.Listener {
-                        override fun onTracksChanged(tracks: Tracks) {
-                            var paramsBuilder = trackSelectionParameters.buildUpon()
-                            var changed = false
-                            
-                            if (savedAudioId.isNotEmpty()) {
-                                for (group in tracks.groups) {
-                                    if (group.type == C.TRACK_TYPE_AUDIO) {
-                                        for (i in 0 until group.length) {
-                                            val format = group.getTrackFormat(i)
-                                            if (format.id == savedAudioId || format.language == savedAudioId) {
-                                                paramsBuilder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(i)))
-                                                changed = true
-                                                break
+
+                    if (rememberSelections) {
+                        addListener(object : Player.Listener {
+                            override fun onTracksChanged(tracks: Tracks) {
+                                var paramsBuilder = trackSelectionParameters.buildUpon()
+                                var changed = false
+
+                                if (savedAudioId.isNotEmpty()) {
+                                    for (group in tracks.groups) {
+                                        if (group.type == C.TRACK_TYPE_AUDIO) {
+                                            for (i in 0 until group.length) {
+                                                val format = group.getTrackFormat(i)
+                                                if (format.id == savedAudioId || format.language == savedAudioId) {
+                                                    paramsBuilder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(i)))
+                                                    changed = true
+                                                    break
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            
-                            if (savedTextId.isNotEmpty()) {
-                                for (group in tracks.groups) {
-                                    if (group.type == C.TRACK_TYPE_TEXT) {
-                                        for (i in 0 until group.length) {
-                                            val format = group.getTrackFormat(i)
-                                            if (format.id == savedTextId || format.language == savedTextId) {
-                                                paramsBuilder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(i)))
-                                                changed = true
-                                                break
+
+                                if (savedTextId.isNotEmpty()) {
+                                    for (group in tracks.groups) {
+                                        if (group.type == C.TRACK_TYPE_TEXT) {
+                                            for (i in 0 until group.length) {
+                                                val format = group.getTrackFormat(i)
+                                                if (format.id == savedTextId || format.language == savedTextId) {
+                                                    paramsBuilder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(i)))
+                                                    changed = true
+                                                    break
+                                                }
                                             }
                                         }
                                     }
                                 }
+
+                                if (changed) {
+                                    trackSelectionParameters = paramsBuilder.build()
+                                }
+                                removeListener(this)
                             }
-                            
-                            if (changed) {
-                                trackSelectionParameters = paramsBuilder.build()
-                            }
-                            removeListener(this)
-                        }
-                    })
-                    
+                        })
+                    }
+
+                    // Default playback speed, volume boost and autoplay toggles.
+                    val defaultSpeed = settingsRepository.defaultPlaybackSpeed.first()
+                    val boostEnabled = settingsRepository.volumeBoostEnabled.first()
+                    val shouldAutoplay = settingsRepository.autoplay.first()
+
+                    playbackParameters = PlaybackParameters(defaultSpeed.coerceIn(0.25f, 3f))
+                    volume = if (boostEnabled) 2.0f else 1.0f
+
                     prepare()
-                    playWhenReady = true
+                    playWhenReady = shouldAutoplay
                 }
             }
     }
-    
+
+    // System Auto-PiP: keep the player reference (MainActivity checks it in
+    // onUserLeaveHint) and enable Android 12+ auto-enter so leaving the app
+    // while a video is playing floats it into system Picture-in-Picture.
+    DisposableEffect(Unit) {
+        SharedPlayer.player = exoPlayer
+        SharedPlayer.autoPipEnabled = autoPipMode
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val pipParams = android.app.PictureInPictureParams.Builder()
+                .setAutoEnterEnabled(autoPipMode)
+                .setAspectRatio(android.util.Rational(16, 9))
+                .build()
+            activity?.setPictureInPictureParams(pipParams)
+        }
+        onDispose {
+            if (SharedPlayer.player === exoPlayer) SharedPlayer.player = null
+            SharedPlayer.autoPipEnabled = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val pipParams = android.app.PictureInPictureParams.Builder()
+                    .setAutoEnterEnabled(false)
+                    .setAspectRatio(android.util.Rational(16, 9))
+                    .build()
+                activity?.setPictureInPictureParams(pipParams)
+            }
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
                 coroutineScope.launch {
-                    settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
+                    if (settingsRepository.resumePlayback.first()) {
+                        settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
+                    }
                     
                     val tracks = exoPlayer.currentTracks
+                    val rememberSelections = settingsRepository.rememberSelections.first()
                     for (group in tracks.groups) {
                         if (group.isSelected) {
                             for (i in 0 until group.length) {
                                 if (group.isTrackSelected(i)) {
                                     val format = group.getTrackFormat(i)
                                     val idToSave = format.id ?: format.language ?: ""
-                                    if (idToSave.isNotEmpty()) {
+                                    if (idToSave.isNotEmpty() && rememberSelections) {
                                         if (group.type == C.TRACK_TYPE_AUDIO) {
                                             settingsRepository.saveAudioTrack(url, idToSave)
                                         } else if (group.type == C.TRACK_TYPE_TEXT) {
@@ -398,16 +484,19 @@ fun PlayerScreen(url: String) {
             exoPlayer.removeListener(bufferingListener)
             if (!com.ghost.video.SharedPlayer.isFloatingMode) {
                 coroutineScope.launch {
-                    settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
+                    if (settingsRepository.resumePlayback.first()) {
+                        settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
+                    }
                     
                     val tracks = exoPlayer.currentTracks
+                    val rememberSelections = settingsRepository.rememberSelections.first()
                     for (group in tracks.groups) {
                         if (group.isSelected) {
                             for (i in 0 until group.length) {
                                 if (group.isTrackSelected(i)) {
                                     val format = group.getTrackFormat(i)
                                     val idToSave = format.id ?: format.language ?: ""
-                                    if (idToSave.isNotEmpty()) {
+                                    if (idToSave.isNotEmpty() && rememberSelections) {
                                         if (group.type == C.TRACK_TYPE_AUDIO) {
                                             settingsRepository.saveAudioTrack(url, idToSave)
                                         } else if (group.type == C.TRACK_TYPE_TEXT) {
@@ -450,24 +539,31 @@ fun PlayerScreen(url: String) {
                     setPadding(0, 0, 0, 0)
                     
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    keepScreenOn = true
+                    keepScreenOn = !backgroundPlay
 
                     subtitleView?.apply {
-                        setApplyEmbeddedFontSizes(subtitleEmbeddedStyles)
-                        setApplyEmbeddedStyles(subtitleEmbeddedStyles)
-                        
-                        if (!subtitleEmbeddedStyles) {
-                            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
-                        }
+                        if (systemCaptionStyle) {
+                            // Use the device's captioning settings from Android's
+                            // accessibility preferences.
+                            setUserDefaultStyle()
+                            setUserDefaultTextSize()
+                        } else {
+                            setApplyEmbeddedFontSizes(subtitleEmbeddedStyles)
+                            setApplyEmbeddedStyles(subtitleEmbeddedStyles)
 
-                        if (!subtitleEmbeddedStyles) {
+                            // Bundled variable fonts so each subtitle option is
+                            // visibly different from the system default.
                             val typeface = when (subtitleFont) {
                                 SubtitleFont.DEFAULT -> Typeface.DEFAULT
-                                SubtitleFont.MONOSPACE -> Typeface.MONOSPACE
-                                SubtitleFont.SANS_SERIF -> Typeface.SANS_SERIF
-                                SubtitleFont.SERIF -> Typeface.SERIF
+                                SubtitleFont.LORA -> ResourcesCompat.getFont(ctx, R.font.lora_variable)
+                                SubtitleFont.JETBRAINS_MONO -> ResourcesCompat.getFont(ctx, R.font.jetbrains_mono_variable)
+                                SubtitleFont.NUNITO -> ResourcesCompat.getFont(ctx, R.font.nunito_variable)
                             }
 
+                            // Apply the user's Font, Bold and Background in BOTH
+                            // cases. Previously these were skipped when "Styled
+                            // Subtitles" was ON (the default), so the Font / Bold
+                            // / Size settings appeared to do nothing.
                             val style = CaptionStyleCompat(
                                 android.graphics.Color.WHITE,
                                 if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
@@ -477,16 +573,12 @@ fun PlayerScreen(url: String) {
                                 typeface
                             )
                             setStyle(style)
-                        } else {
-                            val fallbackStyle = CaptionStyleCompat(
-                                android.graphics.Color.WHITE,
-                                if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
-                                android.graphics.Color.TRANSPARENT,
-                                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                                android.graphics.Color.BLACK,
-                                Typeface.DEFAULT
-                            )
-                            setStyle(fallbackStyle)
+
+                            // Fixed text size only when embedded styles are off;
+                            // otherwise the subtitle file's own sizes win.
+                            if (!subtitleEmbeddedStyles) {
+                                setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
+                            }
                         }
                     }
                     systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or 
@@ -625,7 +717,7 @@ fun PlayerScreen(url: String) {
                         
                         val paddingPx = (12 * ctx.resources.displayMetrics.density).toInt()
                         setPadding(paddingPx, paddingPx, paddingPx, paddingPx)
-                        visibility = View.VISIBLE
+                        visibility = if (pipMode) View.VISIBLE else View.GONE
                         
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -914,6 +1006,14 @@ fun PlayerScreen(url: String) {
                             pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
                             pv.setAspectRatioListener { _, _, _ -> 21f / 9f }
                         }
+                        8 -> { // 16:9
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            pv.setAspectRatioListener { _, _, _ -> 16f / 9f }
+                        }
+                        9 -> { // 18:9
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                            pv.setAspectRatioListener { _, _, _ -> 18f / 9f }
+                        }
                     }
                 }
                 showAspectRatioDialog = false
@@ -958,6 +1058,7 @@ class PlayerGestureHandler(
     private var volumeTriggerCount = 0
     private var brightnessTriggerCount = 0
     private var seekTriggerCount = 0
+    private var normalSpeed = 1f
     
     private val scaleDetector: android.view.ScaleGestureDetector?
     private val gestureDetector: android.view.GestureDetector
@@ -995,6 +1096,7 @@ class PlayerGestureHandler(
         gestureDetector = android.view.GestureDetector(ctx, object : android.view.GestureDetector.SimpleOnGestureListener() {
             override fun onLongPress(e: android.view.MotionEvent) {
                 if (isLockedProvider()) return
+                normalSpeed = exoPlayer.playbackParameters.speed
                 exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(2.0f)
                 onSeekChanged("2x Speed", true, ++seekTriggerCount)
             }
@@ -1060,8 +1162,12 @@ class PlayerGestureHandler(
                             val seekAmount = (distanceX * 50 * gestureSeekSensitivity).toLong()
                             val newPos = (exoPlayer.currentPosition - seekAmount).coerceIn(0, exoPlayer.duration.coerceAtLeast(0))
                             exoPlayer.seekTo(newPos)
-                            val msg = if (distanceX > 0) "+${(seekAmount / 1000).toInt()}s" else "-${(kotlin.math.abs(seekAmount) / 1000).toInt()}s"
-                            onSeekChanged(msg, distanceX > 0, ++seekTriggerCount)
+                            // distanceX is positive when the finger moves LEFT, so a
+                            // rightward swipe (forward seek) has distanceX < 0.
+                            val forward = distanceX < 0
+                            val msg = if (forward) "+${(kotlin.math.abs(seekAmount) / 1000).toInt()}s"
+                            else "-${(kotlin.math.abs(seekAmount) / 1000).toInt()}s"
+                            onSeekChanged(msg, forward, ++seekTriggerCount)
                             return true
                         } else {
                             return false
@@ -1109,7 +1215,7 @@ class PlayerGestureHandler(
         
         if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
             if (exoPlayer.playbackParameters.speed == 2.0f) {
-                exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(1.0f)
+                exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(normalSpeed)
             }
         }
         
@@ -1265,14 +1371,39 @@ fun AudioAdjustDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TextButton(onClick = onReset) {
-                        Text("Reset", color = dialogColors.selectedColor)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(dialogColors.selectedColor.copy(alpha = 0.12f))
+                            .clickable(onClick = onReset)
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Reset",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = dialogColors.selectedColor
+                        )
                     }
-                    TextButton(onClick = onDismiss) {
-                        Text("Done", color = dialogColors.selectedColor)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(dialogColors.selectedColor)
+                            .clickable(onClick = onDismiss)
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Done",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = dialogColors.selectedTextColor
+                        )
                     }
                 }
             }
@@ -1662,8 +1793,8 @@ fun AspectRatioDialog(
         AspectRatioOption("Original (Fit)", AspectRatioFrameLayout.RESIZE_MODE_FIT),
         AspectRatioOption("Stretch (Fill)", AspectRatioFrameLayout.RESIZE_MODE_FILL),
         AspectRatioOption("Crop (Zoom)", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-        AspectRatioOption("16:9", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),
-        AspectRatioOption("18:9", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT),
+        AspectRatioOption("16:9", 8),
+        AspectRatioOption("18:9", 9),
         AspectRatioOption("19:9", 5),
         AspectRatioOption("20:9", 6),
         AspectRatioOption("21:9", 7)

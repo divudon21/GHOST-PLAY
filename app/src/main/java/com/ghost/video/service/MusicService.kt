@@ -16,15 +16,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.ghost.video.MainActivity
+import com.ghost.video.data.SettingsRepository
 import com.ghost.video.ui.screens.LocalAudio
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 
 @OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
@@ -144,6 +147,11 @@ class MusicService : MediaSessionService() {
         }
         _currentAudio.value = audio
         _relayCurrentAudio.value = audio
+
+        // Respect the "Volume Boost 200%" setting for the audio player.
+        serviceScope.launch {
+            player?.volume = if (SettingsRepository(this@MusicService).volumeBoostEnabled.first()) 2f else 1f
+        }
     }
 
     override fun onCreate() {
@@ -192,25 +200,35 @@ class MusicService : MediaSessionService() {
 
         when (intent?.action) {
             ACTION_PLAY -> {
-                val id = intent.getLongExtra("audio_id", 0)
-                val name = intent.getStringExtra("audio_name") ?: "Unknown"
                 val uri = intent.getStringExtra("audio_uri") ?: ""
-                val artist = intent.getStringExtra("audio_artist")
-                val parcelList = intent.getParcelableArrayListExtra<LocalAudio>("playlist") ?: arrayListOf()
-                val fullPlaylist = parcelList.ifEmpty { listOf(LocalAudio(id, name, uri, artist)) }
+                if (uri.isNotEmpty()) {
+                    // Fresh playback request (from the audio list / mini player).
+                    val id = intent.getLongExtra("audio_id", 0)
+                    val name = intent.getStringExtra("audio_name") ?: "Unknown"
+                    val artist = intent.getStringExtra("audio_artist")
+                    val parcelList = intent.getParcelableArrayListExtra<LocalAudio>("playlist") ?: arrayListOf()
+                    val fullPlaylist = parcelList.ifEmpty { listOf(LocalAudio(id, name, uri, artist)) }
 
-                playAudioInternal(LocalAudio(id, name, uri, artist), fullPlaylist)
+                    playAudioInternal(LocalAudio(id, name, uri, artist), fullPlaylist)
 
-                val notification = createNotification(
-                    title = name,
-                    artist = artist?.takeIf { it != "<unknown>" } ?: "Unknown Artist",
-                    isPlaying = true,
-                    hasNext = fullPlaylist.size > 1
-                )
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    val notification = createNotification(
+                        title = name,
+                        artist = artist?.takeIf { it != "<unknown>" } ?: "Unknown Artist",
+                        isPlaying = true,
+                        hasNext = fullPlaylist.size > 1
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
                 } else {
-                    startForeground(NOTIFICATION_ID, notification)
+                    // Resume tapped on the media notification — the notification
+                    // intent carries no extras, so just resume the current track
+                    // instead of trying to play an empty URI (which previously
+                    // wiped the playlist and showed "Unknown").
+                    player?.playWhenReady = true
+                    updateNotification()
                 }
             }
             ACTION_PAUSE -> {

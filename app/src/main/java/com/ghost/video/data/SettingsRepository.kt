@@ -8,7 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import org.json.JSONObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -18,12 +20,7 @@ import kotlinx.coroutines.flow.map
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 enum class ThemePreference {
-    SYSTEM, LIGHT, DARK, AMOLED
-}
-
-enum class AppColorPreference {
-    PURPLE, BLUE, GREEN, ORANGE, RED,
-    PINK, TEAL, YELLOW, CYAN, INDIGO, CUSTOM
+    SYSTEM, LIGHT, DARK
 }
 
 /**
@@ -37,7 +34,7 @@ enum class AppPalette {
 
 enum class AppTextStyle {
     // Keep the original four entries first so existing stored ordinals remain valid.
-    MANROPE, NUNITO, LORA, JETBRAINS_MONO, DEFAULT, INTER
+    MANROPE, NUNITO, LORA, JETBRAINS_MONO, DEFAULT, INTER, CABARET, GRAZING_MACE, ABRAHAM_STAMP
 }
 
 /** Critical appearance values loaded together before the first app frame. */
@@ -62,7 +59,7 @@ enum class DecoderPriority {
 }
 
 enum class SubtitleFont {
-    DEFAULT, MONOSPACE, SANS_SERIF, SERIF
+    DEFAULT, LORA, JETBRAINS_MONO, NUNITO
 }
 
 enum class OrientationPreference {
@@ -80,7 +77,6 @@ enum class LoadingIndicatorStyle {
 
 class SettingsRepository(private val context: Context) {
     private val THEME_KEY = intPreferencesKey("theme_preference")
-    private val COLOR_KEY = intPreferencesKey("color_preference")
     private val PALETTE_KEY = intPreferencesKey("app_palette")
     private val TEXT_STYLE_KEY = intPreferencesKey("app_text_style")
     private val BOLD_TEXT_KEY = booleanPreferencesKey("app_bold_text")
@@ -101,13 +97,12 @@ class SettingsRepository(private val context: Context) {
     private val SUBTITLE_BOLD_KEY = booleanPreferencesKey("subtitle_bold")
     private val SUBTITLE_SIZE_KEY = intPreferencesKey("subtitle_size")
     private val SUBTITLE_BACKGROUND_KEY = booleanPreferencesKey("subtitle_background")
-    private val SUBTITLE_COLOR_KEY = intPreferencesKey("subtitle_color")
     private val SUBTITLE_EMBEDDED_STYLES_KEY = booleanPreferencesKey("subtitle_embedded_styles")
-    private val ORIENTATION_KEY = intPreferencesKey("orientation_preference")
     private val RESUME_PLAYBACK_KEY = booleanPreferencesKey("resume_playback")
     private val DEFAULT_SPEED_KEY = floatPreferencesKey("default_playback_speed")
     private val AUTOPLAY_KEY = booleanPreferencesKey("autoplay")
     private val PIP_MODE_KEY = booleanPreferencesKey("pip_mode")
+    private val AUTO_PIP_MODE_KEY = booleanPreferencesKey("auto_pip_mode")
     private val BACKGROUND_PLAY_KEY = booleanPreferencesKey("background_play")
     private val REMEMBER_BRIGHTNESS_KEY = booleanPreferencesKey("remember_brightness")
     private val REMEMBER_SELECTIONS_KEY = booleanPreferencesKey("remember_selections")
@@ -116,11 +111,15 @@ class SettingsRepository(private val context: Context) {
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
-    private val CUSTOM_COLOR_KEY = intPreferencesKey("custom_color_value")
+    private val GLOW_EFFECT_KEY = booleanPreferencesKey("glow_effect")
     private val BATTERY_SAVER_KEY = booleanPreferencesKey("battery_saver")
     private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
     private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
     private val LOADING_INDICATOR_STYLE_KEY = intPreferencesKey("loading_indicator_style")
+    private val PLAYBACK_POSITIONS_KEY = stringPreferencesKey("playback_positions_map")
+    private val AUDIO_TRACKS_KEY = stringPreferencesKey("audio_tracks_map")
+    private val TEXT_TRACKS_KEY = stringPreferencesKey("text_tracks_map")
+    private val BRIGHTNESS_KEY = floatPreferencesKey("player_brightness")
 
     /**
      * One atomic snapshot for startup theming. Unlike separate StateFlows with
@@ -153,12 +152,6 @@ class SettingsRepository(private val context: Context) {
         .map { preferences ->
             val value = preferences[THEME_KEY] ?: ThemePreference.SYSTEM.ordinal
             ThemePreference.values().getOrElse(value) { ThemePreference.SYSTEM }
-        }
-
-    val colorPreference: Flow<AppColorPreference> = context.dataStore.data
-        .map { preferences ->
-            val value = preferences[COLOR_KEY] ?: AppColorPreference.PURPLE.ordinal
-            AppColorPreference.values().getOrElse(value) { AppColorPreference.PURPLE }
         }
 
     val appPalette: Flow<AppPalette> = context.dataStore.data
@@ -243,17 +236,8 @@ class SettingsRepository(private val context: Context) {
     val subtitleBackground: Flow<Boolean> = context.dataStore.data
         .map { it[SUBTITLE_BACKGROUND_KEY] ?: false }
 
-    val subtitleColor: Flow<Int> = context.dataStore.data
-        .map { it[SUBTITLE_COLOR_KEY] ?: android.graphics.Color.WHITE }
-
     val subtitleEmbeddedStyles: Flow<Boolean> = context.dataStore.data
         .map { it[SUBTITLE_EMBEDDED_STYLES_KEY] ?: true }
-
-    val orientationPreference: Flow<OrientationPreference> = context.dataStore.data
-        .map { preferences ->
-            val value = preferences[ORIENTATION_KEY] ?: OrientationPreference.AUTO.ordinal
-            OrientationPreference.values().getOrElse(value) { OrientationPreference.AUTO }
-        }
 
     val resumePlayback: Flow<Boolean> = context.dataStore.data
         .map { it[RESUME_PLAYBACK_KEY] ?: true }
@@ -266,6 +250,9 @@ class SettingsRepository(private val context: Context) {
 
     val pipMode: Flow<Boolean> = context.dataStore.data
         .map { it[PIP_MODE_KEY] ?: true }
+
+    val autoPipMode: Flow<Boolean> = context.dataStore.data
+        .map { it[AUTO_PIP_MODE_KEY] ?: false }
 
     val backgroundPlay: Flow<Boolean> = context.dataStore.data
         .map { it[BACKGROUND_PLAY_KEY] ?: false }
@@ -297,8 +284,8 @@ class SettingsRepository(private val context: Context) {
     val highContrastDark: Flow<Boolean> = context.dataStore.data
         .map { it[HIGH_CONTRAST_DARK_KEY] ?: false }
 
-    val customColorValue: Flow<Int> = context.dataStore.data
-        .map { it[CUSTOM_COLOR_KEY] ?: android.graphics.Color.parseColor("#6750A4") }
+    val glowEffect: Flow<Boolean> = context.dataStore.data
+        .map { it[GLOW_EFFECT_KEY] ?: false }
 
     val batterySaver: Flow<Boolean> = context.dataStore.data
         .map { it[BATTERY_SAVER_KEY] ?: false }
@@ -315,12 +302,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemePreference(preference: ThemePreference) {
         context.dataStore.edit { preferences ->
             preferences[THEME_KEY] = preference.ordinal
-        }
-    }
-
-    suspend fun setColorPreference(preference: AppColorPreference) {
-        context.dataStore.edit { preferences ->
-            preferences[COLOR_KEY] = preference.ordinal
         }
     }
 
@@ -418,16 +399,8 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[SUBTITLE_BACKGROUND_KEY] = background }
     }
 
-    suspend fun setSubtitleColor(color: Int) {
-        context.dataStore.edit { it[SUBTITLE_COLOR_KEY] = color }
-    }
-
     suspend fun setSubtitleEmbeddedStyles(enabled: Boolean) {
         context.dataStore.edit { it[SUBTITLE_EMBEDDED_STYLES_KEY] = enabled }
-    }
-
-    suspend fun setOrientationPreference(orientation: OrientationPreference) {
-        context.dataStore.edit { it[ORIENTATION_KEY] = orientation.ordinal }
     }
 
     suspend fun setResumePlayback(enabled: Boolean) {
@@ -444,6 +417,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setPipMode(enabled: Boolean) {
         context.dataStore.edit { it[PIP_MODE_KEY] = enabled }
+    }
+
+    suspend fun setAutoPipMode(enabled: Boolean) {
+        context.dataStore.edit { it[AUTO_PIP_MODE_KEY] = enabled }
     }
 
     suspend fun setBackgroundPlay(enabled: Boolean) {
@@ -478,8 +455,8 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[HIGH_CONTRAST_DARK_KEY] = enabled }
     }
 
-    suspend fun setCustomColorValue(color: Int) {
-        context.dataStore.edit { it[CUSTOM_COLOR_KEY] = color }
+    suspend fun setGlowEffect(enabled: Boolean) {
+        context.dataStore.edit { it[GLOW_EFFECT_KEY] = enabled }
     }
 
     suspend fun setBatterySaver(enabled: Boolean) {
@@ -502,45 +479,109 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it.clear() }
     }
 
-    suspend fun savePlaybackPosition(url: String, position: Long) {
-        val key = androidx.datastore.preferences.core.longPreferencesKey("pos_$url")
+    /**
+     * One-time cleanup of the LEGACY per-URL keys (pos_<url>, audio_<url>,
+     * text_<url>) from before playback state was stored in JSON maps. A large
+     * number of those keys makes DataStore's first read slower, which showed up
+     * as a frozen first frame on cold start. This is idempotent and cheap.
+     */
+    suspend fun cleanupLegacyPerUrlKeys() {
         context.dataStore.edit { preferences ->
-            preferences[key] = position
+            val legacy = preferences.asMap().keys.filter { key ->
+                val n = key.name
+                n.startsWith("pos_") || n.startsWith("audio_") || n.startsWith("text_")
+            }
+            if (legacy.isNotEmpty()) {
+                legacy.forEach { preferences.remove(it) }
+            }
         }
     }
 
-    fun getPlaybackPosition(url: String): Flow<Long> {
-        val key = androidx.datastore.preferences.core.longPreferencesKey("pos_$url")
-        return context.dataStore.data.map { preferences ->
-            preferences[key] ?: 0L
+    /**
+     * Playback positions / track selections are stored as small JSON maps under a
+     * fixed set of keys instead of one DataStore key per video URL. The old
+     * approach grew the preferences file forever (every watched URL added a new
+     * key that was never removed); this keeps at most [MAX_TRACKED_MEDIA_ENTRIES]
+     * entries, evicting the least recently used.
+     */
+    suspend fun savePlaybackPosition(url: String, position: Long) {
+        context.dataStore.edit { preferences ->
+            val map = decodeStringMap(preferences[PLAYBACK_POSITIONS_KEY])
+            map.remove(url)
+            map[url] = position.toString()
+            preferences[PLAYBACK_POSITIONS_KEY] = encodeStringMap(trimMap(map))
         }
+    }
+
+    fun getPlaybackPosition(url: String): Flow<Long> = context.dataStore.data.map { preferences ->
+        decodeStringMap(preferences[PLAYBACK_POSITIONS_KEY])[url]?.toLongOrNull() ?: 0L
     }
 
     suspend fun saveAudioTrack(url: String, id: String) {
-        val key = androidx.datastore.preferences.core.stringPreferencesKey("audio_$url")
         context.dataStore.edit { preferences ->
-            preferences[key] = id
+            val map = decodeStringMap(preferences[AUDIO_TRACKS_KEY])
+            map.remove(url)
+            map[url] = id
+            preferences[AUDIO_TRACKS_KEY] = encodeStringMap(trimMap(map))
         }
     }
 
-    fun getAudioTrack(url: String): Flow<String> {
-        val key = androidx.datastore.preferences.core.stringPreferencesKey("audio_$url")
-        return context.dataStore.data.map { preferences ->
-            preferences[key] ?: ""
-        }
+    fun getAudioTrack(url: String): Flow<String> = context.dataStore.data.map { preferences ->
+        decodeStringMap(preferences[AUDIO_TRACKS_KEY])[url] ?: ""
     }
 
     suspend fun saveTextTrack(url: String, id: String) {
-        val key = androidx.datastore.preferences.core.stringPreferencesKey("text_$url")
         context.dataStore.edit { preferences ->
-            preferences[key] = id
+            val map = decodeStringMap(preferences[TEXT_TRACKS_KEY])
+            map.remove(url)
+            map[url] = id
+            preferences[TEXT_TRACKS_KEY] = encodeStringMap(trimMap(map))
         }
     }
 
-    fun getTextTrack(url: String): Flow<String> {
-        val key = androidx.datastore.preferences.core.stringPreferencesKey("text_$url")
-        return context.dataStore.data.map { preferences ->
-            preferences[key] ?: ""
+    fun getTextTrack(url: String): Flow<String> = context.dataStore.data.map { preferences ->
+        decodeStringMap(preferences[TEXT_TRACKS_KEY])[url] ?: ""
+    }
+
+    /** Persist the player brightness so it can be restored next session. */
+    suspend fun saveBrightness(value: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[BRIGHTNESS_KEY] = value.coerceIn(0f, 1f)
         }
     }
+
+    /** Returns the saved brightness, or -1f when none was saved. */
+    fun getBrightness(): Flow<Float> = context.dataStore.data.map { preferences ->
+        preferences[BRIGHTNESS_KEY] ?: -1f
+    }
+}
+
+/** Cap on how many per-video entries (positions/tracks) are remembered. */
+private const val MAX_TRACKED_MEDIA_ENTRIES = 100
+
+private fun decodeStringMap(raw: String?): LinkedHashMap<String, String> {
+    val map = LinkedHashMap<String, String>()
+    if (raw.isNullOrEmpty()) return map
+    return try {
+        val obj = JSONObject(raw)
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            map[key] = obj.optString(key)
+        }
+        map
+    } catch (_: Exception) {
+        map
+    }
+}
+
+private fun encodeStringMap(map: Map<String, String>): String =
+    JSONObject().apply { map.forEach { (k, v) -> put(k, v) } }.toString()
+
+private fun trimMap(map: LinkedHashMap<String, String>): LinkedHashMap<String, String> {
+    while (map.size > MAX_TRACKED_MEDIA_ENTRIES) {
+        val oldest = map.keys.firstOrNull() ?: break
+        map.remove(oldest)
+    }
+    return map
 }

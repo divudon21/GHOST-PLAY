@@ -3,7 +3,6 @@ package com.ghost.video.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.AppPalette
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.DecoderPriority
@@ -38,13 +37,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = ThemePreference.SYSTEM
-        )
-
-    val colorPreference: StateFlow<AppColorPreference> = repository.colorPreference
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = AppColorPreference.PURPLE
         )
 
     val appPalette: StateFlow<AppPalette> = repository.appPalette
@@ -187,25 +179,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
-    val subtitleColor: StateFlow<Int> = repository.subtitleColor
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = android.graphics.Color.WHITE
-        )
-
     val subtitleEmbeddedStyles: StateFlow<Boolean> = repository.subtitleEmbeddedStyles
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = true
-        )
-
-    val orientationPreference: StateFlow<OrientationPreference> = repository.orientationPreference
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = OrientationPreference.AUTO
         )
 
     val resumePlayback: StateFlow<Boolean> = repository.resumePlayback
@@ -234,6 +212,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = true
+        )
+
+    val autoPipMode: StateFlow<Boolean> = repository.autoPipMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
         )
 
     val backgroundPlay: StateFlow<Boolean> = repository.backgroundPlay
@@ -292,11 +277,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
-    val customColorValue: StateFlow<Int> = repository.customColorValue
+    val glowEffect: StateFlow<Boolean> = repository.glowEffect
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = android.graphics.Color.parseColor("#6750A4")
+            initialValue = false
         )
 
     val batterySaver: StateFlow<Boolean> = repository.batterySaver
@@ -323,12 +308,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setTheme(theme: ThemePreference) {
         viewModelScope.launch {
             repository.setThemePreference(theme)
-        }
-    }
-
-    fun setColor(color: AppColorPreference) {
-        viewModelScope.launch {
-            repository.setColorPreference(color)
         }
     }
 
@@ -408,16 +387,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { repository.setSubtitleBackground(background) }
     }
 
-    fun setSubtitleColor(color: Int) {
-        viewModelScope.launch { repository.setSubtitleColor(color) }
-    }
-
     fun setSubtitleEmbeddedStyles(enabled: Boolean) {
         viewModelScope.launch { repository.setSubtitleEmbeddedStyles(enabled) }
-    }
-
-    fun setOrientationPreference(orientation: OrientationPreference) {
-        viewModelScope.launch { repository.setOrientationPreference(orientation) }
     }
 
     fun setResumePlayback(enabled: Boolean) {
@@ -434,6 +405,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setPipMode(enabled: Boolean) {
         viewModelScope.launch { repository.setPipMode(enabled) }
+    }
+
+    fun setAutoPipMode(enabled: Boolean) {
+        viewModelScope.launch { repository.setAutoPipMode(enabled) }
     }
 
     fun setBackgroundPlay(enabled: Boolean) {
@@ -468,8 +443,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { repository.setHighContrastDark(enabled) }
     }
 
-    fun setCustomColorValue(color: Int) {
-        viewModelScope.launch { repository.setCustomColorValue(color) }
+    fun setGlowEffect(enabled: Boolean) {
+        viewModelScope.launch { repository.setGlowEffect(enabled) }
     }
 
     fun setBatterySaver(enabled: Boolean) {
@@ -488,11 +463,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { repository.setLoadingIndicatorStyle(style) }
     }
 
-    /**
-     * Apply an app-color swatch. Named swatches (the 10 polished schemes) pass an
-     * [AppColorPreference]; the extra Material swatches pass [AppColorPreference.CUSTOM]
-     * together with an exact [hex] color so any of the 20 swatches applies correctly.
-     */
     fun setAppPalette(palette: AppPalette) {
         viewModelScope.launch { repository.setAppPalette(palette) }
     }
@@ -503,15 +473,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setBoldText(enabled: Boolean) {
         viewModelScope.launch { repository.setBoldText(enabled) }
-    }
-
-    fun setColorSwatch(preference: AppColorPreference, hex: Int) {
-        viewModelScope.launch {
-            if (preference == AppColorPreference.CUSTOM) {
-                repository.setCustomColorValue(hex)
-            }
-            repository.setColorPreference(preference)
-        }
     }
 
     fun resetAllSettings() {

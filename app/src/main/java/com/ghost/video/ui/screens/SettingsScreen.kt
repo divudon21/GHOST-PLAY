@@ -29,9 +29,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ghost.video.data.AppColorPreference
 import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ThemePreference
+import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,7 +47,9 @@ fun SettingsScreen(
     onNavigateToSubtitle: () -> Unit = {},
     onNavigateToGeneral: () -> Unit = {},
     onNavigateToBatterySaver: () -> Unit = {},
-    onNavigateToAppUpdate: () -> Unit = {}
+    onNavigateToAppUpdate: () -> Unit = {},
+    onSwipeNext: () -> Unit = {},
+    onSwipePrevious: () -> Unit = {}
 ) {
     val currentTheme by viewModel.themePreference.collectAsState()
     val currentStrategy by viewModel.thumbnailStrategy.collectAsState()
@@ -99,7 +101,8 @@ fun SettingsScreen(
             title = "Thumbnail generation",
             subtitle = strategyLabel,
             icon = Icons.Rounded.Image,
-            onClick = onNavigateToThumbnail
+            onClick = onNavigateToThumbnail,
+            highlightSubtitle = true
         ),
         SettingsCategory(
             title = "General",
@@ -122,16 +125,21 @@ fun SettingsScreen(
     )
 
     Scaffold(
+        modifier = Modifier.tabSwipe(onSwipeNext, onSwipePrevious),
+        // The outer NavHost already pads the tab screens by the status/nav bar
+        // insets, so tell this inner Scaffold not to add them a second time
+        // (otherwise the list gets an extra gap under the title and at the bottom).
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
-            // Compact title sitting higher: no top inset, no extra bottom padding.
+            // Tab header consistent with the other top-level tabs (titleLarge).
             Text(
                 text = "Settings",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
             )
         }
     ) { padding ->
@@ -148,7 +156,8 @@ fun SettingsScreen(
                     subtitle = category.subtitle,
                     icon = category.icon,
                     onClick = category.onClick,
-                    showTopDivider = index == 0
+                    showTopDivider = index == 0,
+                    highlightSubtitle = category.highlightSubtitle
                 )
             }
         }
@@ -161,7 +170,8 @@ fun SettingsCategoryCard(
     subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    showTopDivider: Boolean = false
+    showTopDivider: Boolean = false,
+    highlightSubtitle: Boolean = false
 ) {
     val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -192,7 +202,9 @@ fun SettingsCategoryCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    fontWeight = if (highlightSubtitle) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (highlightSubtitle) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                 )
             }
             Icon(
@@ -209,7 +221,8 @@ data class SettingsCategory(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
-    val onClick: () -> Unit
+    val onClick: () -> Unit,
+    val highlightSubtitle: Boolean = false
 )
 
 @Composable
@@ -280,8 +293,3 @@ data class ThemeOption(
     val preference: ThemePreference
 )
 
-data class ColorOption(
-    val name: String,
-    val colorValue: Color,
-    val preference: AppColorPreference
-)

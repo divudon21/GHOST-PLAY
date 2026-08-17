@@ -12,11 +12,16 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.ghost.video.BuildConfig
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
@@ -38,7 +43,9 @@ class UpdateWorker(
         if (!enabled) return Result.success()
 
         val release = UpdateChecker.fetchLatestRelease() ?: return Result.retry()
-        val current = "1.0"
+        // Compare against the real installed version instead of a hardcoded one,
+        // so users who are already up to date never get a false "update" nag.
+        val current = BuildConfig.VERSION_NAME
         if (!isNewer(release.tag, current)) return Result.success()
 
         // Don't nag about a release the user already saw.
@@ -100,20 +107,46 @@ class UpdateWorker(
         private const val CHANNEL_ID = "ghost_play_updates"
         private const val NOTIF_ID = 4201
         private const val WORK_NAME = "ghost_play_update_check"
+        private const val WORK_NAME_ONCE = "ghost_play_update_check_once"
 
-        /** Schedule a daily background update check. Safe to call repeatedly. */
+        /**
+         * Schedule the update checks. Safe to call repeatedly (on app start and
+         * when the user enables the toggle).
+         *
+         * Two pieces of work are enqueued:
+         *  1. An immediate one-time check, so a newly published release is noticed
+         *     right away instead of waiting up to a full day for the first periodic
+         *     run (the old behaviour made notifications appear to "never arrive").
+         *  2. A daily periodic check, so it keeps working even if the app is not
+         *     opened for a long time.
+         */
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.DAYS)
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val periodic = PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.DAYS)
+                .setConstraints(constraints)
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                request
+                ExistingPeriodicWorkPolicy.UPDATE,
+                periodic
+            )
+
+            val once = OneTimeWorkRequestBuilder<UpdateWorker>()
+                .setConstraints(constraints)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                WORK_NAME_ONCE,
+                ExistingWorkPolicy.REPLACE,
+                once
             )
         }
 
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_ONCE)
         }
     }
 }

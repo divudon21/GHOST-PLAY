@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -163,83 +164,6 @@ fun ThumbnailSettingsScreen(onBack: () -> Unit, viewModel: SettingsViewModel = v
     }
 
 @Composable
-fun ThumbnailPickerCard(
-    selectedOption: ThumbnailOption,
-    onClick: () -> Unit
-) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = selectedOption.icon,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Choose Thumbnail generation",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = selectedOption.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = "Choose Thumbnail generation",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-    }
-}
-
-@Composable
-fun ThumbnailPickerDialog(
-    options: List<ThumbnailOption>,
-    selectedStrategy: ThumbnailStrategy,
-    onDismiss: () -> Unit,
-    onThumbnailSelected: (ThumbnailStrategy) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Choose Thumbnail generation") },
-        text = {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.heightIn(max = 420.dp)
-            ) {
-                items(options) { option ->
-                    ThumbnailDialogOptionRow(
-                        option = option,
-                        isSelected = selectedStrategy == option.strategy,
-                        onClick = { onThumbnailSelected(option.strategy) }
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
 fun ThumbnailDialogOptionRow(
     option: ThumbnailOption,
     isSelected: Boolean,
@@ -298,6 +222,8 @@ fun ThumbnailDialogOptionRow(
         }
     }
 }
+
+
 
 data class ThumbnailOption(
     val strategy: ThumbnailStrategy,

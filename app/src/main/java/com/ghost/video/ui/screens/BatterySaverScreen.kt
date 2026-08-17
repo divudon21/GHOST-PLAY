@@ -70,7 +70,7 @@ fun BatterySaverScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Reduce animations, disable thumbnail generation and background playback to save power",
+                                text = "Disable thumbnail generation to save power",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                             )
@@ -87,7 +87,7 @@ fun BatterySaverScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "When battery saver is on, Ghost Play keeps power usage low by trimming heavy visual effects and background work. Turn it off any time for the full experience.",
+                    text = "When battery saver is on, Ghost Play skips thumbnail generation (the heaviest work on the media list) so scrolling stays light and the battery lasts longer. Turn it off any time for the full experience.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )

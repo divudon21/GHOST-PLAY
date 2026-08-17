@@ -1,0 +1,19 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="12"
+    android:viewportHeight="12">
+    <!-- Magnifying-glass ring: circle centered at (4.5,4.5), radius 3.5, stroked. -->
+    <path
+        android:pathData="M4.5,1 C6.433,1 8,2.567 8,4.5 C8,6.433 6.433,8 4.5,8 C2.567,8 1,6.433 1,4.5 C1,2.567 2.567,1 4.5,1 Z"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:fillColor="#00000000" />
+    <!-- Handle: from (11,11) to (7.5,7.5), round cap. -->
+    <path
+        android:pathData="M11,11 L7.5,7.5"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>

@@ -3,14 +3,9 @@ package com.ghost.video.ui.screens
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.MusicNote
@@ -27,12 +22,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ghost.video.ui.components.DeterminateLinearWavyProgress
 import com.ghost.video.viewmodel.AudioViewModel
 import kotlinx.coroutines.delay
 
@@ -106,12 +101,12 @@ fun AudioPlayerScreen(
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.weight(0.6f))
+            Spacer(modifier = Modifier.weight(0.35f))
 
             // Album art
             Card(
                 modifier = Modifier
-                    .fillMaxWidth(0.82f)
+                    .fillMaxWidth(0.90f)
                     .aspectRatio(1f),
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -177,14 +172,14 @@ fun AudioPlayerScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Seek bar — thick rounded pill style (no thumb), draggable/tappable.
-            PillProgressBar(
+            // Seek bar — wavy progress indicator, tappable/draggable to scrub.
+            DeterminateLinearWavyProgress(
                 progress = sliderValue,
-                onSeek = { fraction ->
+                onProgressChange = { fraction ->
                     isUserSeeking = true
                     seekPreview = fraction.coerceIn(0f, 1f)
                 },
-                onSeekFinished = {
+                onProgressChangeFinished = {
                     val target = (seekPreview * effectiveDuration).toLong()
                     audioViewModel.seekTo(target)
                     positionMs = target
@@ -274,65 +269,16 @@ fun AudioPlayerScreen(
     }
 }
 
-/**
- * Thick rounded "pill" progress bar (matches the reference screenshot):
- *  - A tall, fully-rounded inactive track.
- *  - A fully-rounded filled portion on top — no circular thumb.
- *  - Tap anywhere or drag horizontally to seek.
- */
-@Composable
-private fun PillProgressBar(
-    progress: Float,
-    onSeek: (Float) -> Unit,
-    onSeekFinished: () -> Unit,
-    modifier: Modifier = Modifier,
-    height: Dp = 12.dp
-) {
-    val density = LocalDensity.current
-    var widthPx by remember { mutableStateOf(1f) }
-    val safeProgress = progress.coerceIn(0f, 1f)
-
-    Box(
-        modifier = modifier
-            .height(height)
-            .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    onSeek(offset.x / widthPx)
-                    onSeekFinished()
-                }
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset -> onSeek(offset.x / widthPx) },
-                    onHorizontalDrag = { change, _ -> onSeek(change.position.x / widthPx) },
-                    onDragEnd = { onSeekFinished() },
-                    onDragCancel = { onSeekFinished() }
-                )
-            }
-    ) {
-        // Inactive track (full width, rounded).
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
-        )
-        // Active fill (rounded pill).
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(safeProgress)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f))
-        )
-    }
-}
-
 fun formatMillis(ms: Long): String {
     if (ms <= 0) return "0:00"
     val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
+    // Long audios (podcasts / audiobooks) show hours too: 1:15:00 instead of 75:00.
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
+    }
 }

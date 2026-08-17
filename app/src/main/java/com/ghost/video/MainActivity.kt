@@ -2,12 +2,14 @@ package com.ghost.video
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
 import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,12 +19,13 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.painterResource
@@ -67,10 +70,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.Dp
@@ -89,6 +97,7 @@ import androidx.navigation.NavHostController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
 import java.net.URLEncoder
@@ -107,6 +116,10 @@ import com.ghost.video.ui.screens.SettingsScreen
 import com.ghost.video.ui.screens.SubtitleSettingsScreen
 import com.ghost.video.ui.screens.ThumbnailSettingsScreen
 import com.ghost.video.ui.theme.AgonAppTheme
+import com.ghost.video.data.ThemePreference
+import com.ghost.video.data.AppPalette
+import com.ghost.video.data.AppTextStyle
+import com.ghost.video.ui.components.LocalGlowEffect
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
 import java.net.URLDecoder
@@ -146,15 +159,12 @@ private val TAB_SLIDE_OUT_RIGHT = slideOutHorizontally(
 private val FADE_IN = fadeIn(animationSpec = alphaTween())
 private val FADE_OUT = fadeOut(animationSpec = alphaTween())
 
-// Fade-through transition for the bottom-nav tabs (Home / Audio / Settings).
-// This is the Material "fade through" pattern used by many top apps: the
-// outgoing screen fades out while slightly shrinking, and the incoming screen
-// fades in while gently scaling up — no sliding. Feels calm and premium.
-private const val TAB_FADE_DURATION = 160
+// Tab switch transition: a short, cheap cross-fade. The full-screen horizontal
+// slide was removed — tabs are switched by a Telegram-style swipe gesture
+// (TabSwipe modifier) or by tapping the bottom nav. A fade has zero layout cost,
+// so it can't jitter the heavy video grid while it slides.
+private const val TAB_FADE_DURATION = 180
 
-// A simple, light cross-fade for bottom-nav tabs. No scale/delay — those caused a
-// visible pause + extra GPU work that felt like jitter when switching Home/Audio/
-// Settings. A plain fade is the smoothest and cheapest option.
 private val TAB_ENTER =
     fadeIn(animationSpec = tween(durationMillis = TAB_FADE_DURATION, easing = FastOutSlowInEasing))
 
@@ -162,6 +172,30 @@ private val TAB_EXIT =
     fadeOut(animationSpec = tween(durationMillis = TAB_FADE_DURATION, easing = FastOutSlowInEasing))
 
 class MainActivity : ComponentActivity() {
+    // Auto Picture-in-Picture (system): when the user leaves the app while a
+    // video is playing, enter system PiP. Android 12+ (S) handles this through
+    // setAutoEnterEnabled(), so this covers Android 7–11 (back/home button).
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
+            SharedPlayer.autoPipEnabled
+        ) {
+            val p = SharedPlayer.player
+            if (p != null && p.isPlaying && !isInPictureInPictureMode) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val params = android.app.PictureInPictureParams.Builder()
+                        .setAspectRatio(android.util.Rational(16, 9))
+                        .build()
+                    enterPictureInPictureMode(params)
+                } else {
+                    @Suppress("DEPRECATION")
+                    enterPictureInPictureMode()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -176,14 +210,18 @@ class MainActivity : ComponentActivity() {
         // background check is (re)scheduled after an app restart / reboot.
         lifecycleScope.launch {
             val repo = com.ghost.video.data.SettingsRepository(applicationContext)
+            // Remove legacy per-URL keys once, so DataStore reads stay fast.
+            repo.cleanupLegacyPerUrlKeys()
             if (repo.updateNotifications.first()) {
                 com.ghost.video.data.UpdateWorker.schedule(applicationContext)
             }
         }
 
-        // Do not let Android draw a frame with fallback theme values. The
-        // listener is removed immediately after Compose has the persisted theme,
-        // so there is no polling or ongoing rendering cost.
+        // Previously this gate blocked the first frame until DataStore returned
+        // the saved theme, which froze the app for 1-2s on cold starts (blank
+        // screen). The UI now composes immediately with fallback defaults, so the
+        // gate only skips frames until the first composition is ready, and a short
+        // timeout acts as a safety net so drawing can never stay blocked.
         var isInitialThemeReady = false
         val contentView = window.decorView
         val firstDrawGate = object : ViewTreeObserver.OnPreDrawListener {
@@ -196,23 +234,26 @@ class MainActivity : ComponentActivity() {
             }
         }
         contentView.viewTreeObserver.addOnPreDrawListener(firstDrawGate)
+        // Safety net: never block the first frame for more than a moment.
+        contentView.postDelayed({ isInitialThemeReady = true }, 350L)
 
         setContent {
             val settingsViewModel: SettingsViewModel = viewModel()
             val startupTheme by settingsViewModel.startupThemeSettings.collectAsState()
 
-            startupTheme?.let { savedTheme ->
-                AgonAppTheme(
-                    themePreference = savedTheme.theme,
-                    palette = savedTheme.palette,
-                    textStyle = savedTheme.textStyle,
-                    boldText = savedTheme.boldText,
-                    highContrastDark = savedTheme.highContrastDark
-                ) {
-                    MainApp(externalVideoUrl = externalVideoUrl)
-                }
-                SideEffect { isInitialThemeReady = true }
+            // Render immediately with app defaults; the persisted theme swaps in
+            // the moment DataStore emits it. This keeps startup instant instead of
+            // waiting on the disk read.
+            AgonAppTheme(
+                themePreference = startupTheme?.theme ?: ThemePreference.SYSTEM,
+                palette = startupTheme?.palette ?: AppPalette.MONOCHROME,
+                textStyle = startupTheme?.textStyle ?: AppTextStyle.DEFAULT,
+                boldText = startupTheme?.boldText ?: false,
+                highContrastDark = startupTheme?.highContrastDark ?: false
+            ) {
+                MainApp(externalVideoUrl = externalVideoUrl)
             }
+            SideEffect { isInitialThemeReady = true }
         }
     }
 }
@@ -225,11 +266,25 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
     // causing a visible "reset/refresh" flash. Sharing a single warmed-up VM
     // (its flows are collected Eagerly) means saved values are ready instantly.
     val sharedSettingsViewModel: SettingsViewModel = viewModel()
+    val glowEffect by sharedSettingsViewModel.glowEffect.collectAsState()
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val showBottomNavRoutes = listOf("home", "audio", "settings")
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Telegram-style tab swipe: moves to the adjacent tab (index + delta) without
+    // growing the back stack — same navigation the bottom nav uses.
+    fun swipeToAdjacentTab(delta: Int) {
+        val idx = showBottomNavRoutes.indexOf(currentRoute).coerceAtLeast(0)
+        val target = idx + delta
+        if (target in showBottomNavRoutes.indices) {
+            navController.navigate(showBottomNavRoutes[target]) {
+                popUpTo("home")
+                launchSingleTop = true
+            }
+        }
+    }
     
     // Automatically navigate to player if opened from an external source
     LaunchedEffect(externalVideoUrl) {
@@ -241,6 +296,7 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
         }
     }
 
+    CompositionLocalProvider(LocalGlowEffect provides glowEffect) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = { 
@@ -345,37 +401,69 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                         }
                     }
 
-                if (currentRoute in showBottomNavRoutes) {
+                // Slide + fade the bottom nav in/out when moving between the tab
+                // screens and the deeper pages. A hard cut here is what makes Back
+                // feel like a jump instead of a smooth return.
+                AnimatedVisibility(
+                    visible = currentRoute in showBottomNavRoutes,
+                    enter = slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)),
+                    exit = slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)),
+                ) {
                     BottomNav(navController, currentRoute)
                 }
             }
         },
     ) { innerPadding ->
+        // Instant padding (no animation): animating the padding re-laid-out the
+        // whole content every frame, which caused jitter on the heavy video grid.
+        // The bottom bar already slides via AnimatedVisibility and the content
+        // cross-fades, so the bar appear/disappear is still smooth.
+        val isTabRoute = currentRoute in showBottomNavRoutes
+        val layoutDirection = LocalLayoutDirection.current
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier.padding(if (currentRoute in showBottomNavRoutes) innerPadding else PaddingValues(0.dp)),
+            modifier = Modifier.padding(
+                top = if (isTabRoute) innerPadding.calculateTopPadding() else 0.dp,
+                bottom = if (isTabRoute) innerPadding.calculateBottomPadding() else 0.dp,
+                start = if (isTabRoute) innerPadding.calculateStartPadding(layoutDirection) else 0.dp,
+                end = if (isTabRoute) innerPadding.calculateEndPadding(layoutDirection) else 0.dp
+            ),
         ) {
             composable(
                 "home",
-                enterTransition = { null },
-                exitTransition = { null },
-                popEnterTransition = { null },
-                popExitTransition = { null }
+                enterTransition = { TAB_ENTER },
+                exitTransition = { TAB_EXIT },
+                popEnterTransition = { TAB_ENTER },
+                popExitTransition = { TAB_EXIT }
             ) {
-                HomeScreen(onPlayUrl = { url ->
-                    val encodedUrl = URLEncoder.encode(url, "UTF-8")
-                    navController.navigate("player/$encodedUrl")
-                })
+                HomeScreen(
+                    onPlayUrl = { url ->
+                        val encodedUrl = URLEncoder.encode(url, "UTF-8")
+                        navController.navigate("player/$encodedUrl")
+                    },
+                    onSwipeNext = { swipeToAdjacentTab(1) },
+                    onSwipePrevious = { swipeToAdjacentTab(-1) }
+                )
             }
             composable(
                 "audio",
-                enterTransition = { null },
-                exitTransition = { null },
-                popEnterTransition = { null },
-                popExitTransition = { null }
+                enterTransition = { TAB_ENTER },
+                exitTransition = { TAB_EXIT },
+                popEnterTransition = { TAB_ENTER },
+                popExitTransition = { TAB_EXIT }
             ) {
-                AudioScreen(viewModel = audioViewModel)
+                AudioScreen(
+                    viewModel = audioViewModel,
+                    onSwipeNext = { swipeToAdjacentTab(1) },
+                    onSwipePrevious = { swipeToAdjacentTab(-1) }
+                )
             }
             composable(
                 "audio_player",
@@ -395,10 +483,10 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
             }
             composable(
                 "settings",
-                enterTransition = { null },
-                exitTransition = { null },
-                popEnterTransition = { null },
-                popExitTransition = { null }
+                enterTransition = { TAB_ENTER },
+                exitTransition = { TAB_EXIT },
+                popEnterTransition = { TAB_ENTER },
+                popExitTransition = { TAB_EXIT }
             ) {
                 SettingsScreen(
                     viewModel = sharedSettingsViewModel,
@@ -419,7 +507,9 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                     onNavigateToSubtitle = { navController.navigate("subtitle_settings") { launchSingleTop = true } },
                     onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } },
                     onNavigateToBatterySaver = { navController.navigate("battery_saver") { launchSingleTop = true } },
-                    onNavigateToAppUpdate = { navController.navigate("app_update") { launchSingleTop = true } }
+                    onNavigateToAppUpdate = { navController.navigate("app_update") { launchSingleTop = true } },
+                    onSwipeNext = { swipeToAdjacentTab(1) },
+                    onSwipePrevious = { swipeToAdjacentTab(-1) }
                 )
             }
             composable(
@@ -556,6 +646,7 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
             }
         }
     }
+    }
 }
 
 @Composable
@@ -568,6 +659,7 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
         painterResource(id = R.drawable.ic_settings)
     )
     val currentIndex = routes.indexOf(currentRoute).coerceAtLeast(0)
+    val density = LocalDensity.current
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     // Keep the exact existing capsule geometry, but tint the moving selected
@@ -603,12 +695,23 @@ fun BottomNav(navController: NavHostController, currentRoute: String?) {
                 .padding(pad)
         ) {
             val segWidth = maxWidth / routes.size
-            // Switch the selected segment instantly; no sliding animation.
-            val thumbOffset = segWidth * currentIndex
+            // Professional spring-driven pill (the standard used by polished
+            // animated bottom-nav libraries): spring physics accelerates and
+            // settles naturally, unlike a mechanical tween. Still a single-value
+            // animateDpAsState — only the pill's offset recomposes per frame, so
+            // performance stays flat.
+            val thumbOffset by animateDpAsState(
+                targetValue = segWidth * currentIndex,
+                animationSpec = spring(
+                    stiffness = Spring.StiffnessMediumLow,
+                    dampingRatio = Spring.DampingRatioNoBouncy
+                ),
+                label = "bottomNavThumb"
+            )
 
             Box(
                 modifier = Modifier
-                    .offset(x = thumbOffset)
+                    .graphicsLayer { translationX = with(density) { thumbOffset.toPx() } }
                     .width(segWidth)
                     .fillMaxHeight()
                     .clip(CircleShape)
@@ -646,6 +749,17 @@ private fun RowScope.BottomNavSegment(
         label = "bottomNavTint"
     )
 
+    // Subtle scale "pop" on the active icon — springy, no layout cost
+    // (graphicsLayer transform only, not a recomposition-heavy size change).
+    val iconScale by animateFloatAsState(
+        targetValue = if (isActive) 1.14f else 1f,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMedium,
+            dampingRatio = Spring.DampingRatioNoBouncy
+        ),
+        label = "bottomNavIconScale"
+    )
+
     Box(
         modifier = Modifier
             .weight(1f)
@@ -666,14 +780,24 @@ private fun RowScope.BottomNavSegment(
                     imageVector = icon,
                     contentDescription = label,
                     tint = tint,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer {
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        }
                 )
             } else {
                 Icon(
                     painter = icon as androidx.compose.ui.graphics.painter.Painter,
                     contentDescription = label,
                     tint = tint,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer {
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        }
                 )
             }
             Spacer(modifier = Modifier.height(2.dp))
@@ -687,3 +811,4 @@ private fun RowScope.BottomNavSegment(
         }
     }
 }
+
