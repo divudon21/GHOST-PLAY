@@ -35,15 +35,19 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Assemble release (split ABI + universal)
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        id: build
+        continue-on-error: true
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Collect APKs
+        if: steps.build.outcome == 'success'
         run: |
           mkdir -p output
           find app/build/outputs/apk/release -name "*.apk" -exec cp {} output/ \;
           ls -lh output
 
       - name: Upload APKs
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ghost-play-apks
@@ -52,8 +56,25 @@ jobs:
           retention-days: 30
 
       - name: Attach APKs to release (tag builds)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.build.outcome == 'success' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: output/*.apk
           generate_release_notes: true
+
+      # The integration that reads this repository cannot download Actions logs,
+      # so a failed build publishes its tail to the `ci-log` branch instead.
+      - name: Publish build log (on failure)
+        if: steps.build.outcome != 'success'
+        run: |
+          mkdir -p ci
+          tail -n 600 build.log > ci/last-build.log || true
+          git config user.name "ghost-ci"
+          git config user.email "ci@ghost.local"
+          git add -f ci/last-build.log
+          git commit -m "ci: failed build log" || true
+          git push origin HEAD:refs/heads/ci-log --force
+
+      - name: Fail the run when the build failed
+        if: steps.build.outcome != 'success'
+        run: exit 1
