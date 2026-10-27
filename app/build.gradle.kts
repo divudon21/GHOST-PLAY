@@ -52,6 +52,14 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            // Plain JVM unit tests (audio processor maths, notification action
+            // mapping, settings key filtering). Android stubs return defaults.
+            isReturnDefaultValues = true
+        }
+    }
+
     configurations.all {
         resolutionStrategy.force(
             "androidx.compose.material3:material3:1.4.0-alpha10",
@@ -112,4 +120,6 @@ dependencies {
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
 }

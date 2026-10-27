@@ -493,24 +493,17 @@ class SettingsRepository(private val context: Context) {
      * as a frozen first frame on cold start. This is idempotent and cheap.
      */
     suspend fun cleanupLegacyPerUrlKeys() {
-        // Keys currently in use. The prefix test below must never match these:
-        // "audio_tracks_map" / "text_tracks_map" start with "audio_"/"text_", so
-        // the old version deleted the new JSON maps on every single launch and
-        // "remember track selection" never survived a restart.
         val currentKeys = setOf(
             PLAYBACK_POSITIONS_KEY.name,
             AUDIO_TRACKS_KEY.name,
             TEXT_TRACKS_KEY.name,
         )
         context.dataStore.edit { preferences ->
-            val legacy = preferences.asMap().keys.filter { key ->
-                val n = key.name
-                n !in currentKeys && (
-                    n.startsWith("pos_") || n.startsWith("audio_") || n.startsWith("text_")
-                    )
-            }
+            val legacy = legacyKeysToRemove(preferences.asMap().keys.map { it.name }, currentKeys)
             if (legacy.isNotEmpty()) {
-                legacy.forEach { preferences.remove(it) }
+                legacy.forEach { name ->
+                    preferences.asMap().keys.firstOrNull { it.name == name }?.let { preferences.remove(it) }
+                }
             }
         }
     }
@@ -602,4 +595,24 @@ private fun trimMap(map: LinkedHashMap<String, String>): LinkedHashMap<String, S
         map.remove(oldest)
     }
     return map
+}
+
+/**
+ * Names of the LEGACY per-URL preference keys (`pos_<url>`, `audio_<url>`,
+ * `text_<url>`) that should be deleted.
+ *
+ * [currentKeys] are the keys the app uses today and must never be returned:
+ * `audio_tracks_map` and `text_tracks_map` also start with `audio_` / `text_`,
+ * so the earlier prefix-only test deleted the live JSON maps on every launch and
+ * "remember track selection" never survived a restart.
+ */
+internal fun legacyKeysToRemove(
+    allKeys: Collection<String>,
+    currentKeys: Set<String>,
+): List<String> = allKeys.filter { name ->
+    name !in currentKeys && (
+        name.startsWith("pos_") ||
+            name.startsWith("audio_") ||
+            name.startsWith("text_")
+        )
 }

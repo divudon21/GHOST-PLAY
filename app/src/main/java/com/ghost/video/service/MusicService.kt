@@ -367,11 +367,7 @@ class MusicService : MediaSessionService() {
         // play/pause exists and it is action 0. Requesting index 1 there was an
         // out-of-bounds crash (IllegalArgumentException while building the
         // notification) whenever a playlist had just one track.
-        val compactActions = if (hasNext) {
-            intArrayOf(0, 1, 2) // previous, play/pause, next
-        } else {
-            intArrayOf(0) // play/pause only
-        }
+        val compactActions = compactActionIndices(hasSiblings = hasNext)
 
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
             .setMediaSession(mediaSession?.sessionCompatToken)
@@ -430,3 +426,16 @@ class MusicService : MediaSessionService() {
         serviceScope.cancel()
     }
 }
+
+/**
+ * Number of actions [MusicService] adds to its media notification.
+ * Previous and next are only added when the queue has more than one item.
+ */
+internal fun notificationActionCount(hasSiblings: Boolean): Int = if (hasSiblings) 3 else 1
+
+/**
+ * Indices passed to `setShowActionsInCompactView`, must stay below
+ * [notificationActionCount] or the notification builder throws.
+ */
+internal fun compactActionIndices(hasSiblings: Boolean): IntArray =
+    if (hasSiblings) intArrayOf(0, 1, 2) else intArrayOf(0)
