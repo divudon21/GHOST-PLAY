@@ -122,6 +122,12 @@ import com.ghost.video.data.AppTextStyle
 import com.ghost.video.ui.components.LocalGlowEffect
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
+import com.ghost.video.navigation.convx.GhostConvxNavigationBar
+import com.ghost.video.navigation.convx.GhostNavTab
+import com.ghost.video.navigation.convx.floatingtabbar.FloatingTabBarInlineBehavior
+import com.ghost.video.navigation.convx.floatingtabbar.rememberFloatingTabBarScrollConnection
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import java.net.URLDecoder
 import kotlin.math.abs
 import kotlin.math.min
@@ -273,6 +279,24 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
     val showBottomNavRoutes = listOf("home", "audio", "settings")
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // Convx's folding bar collapses to the selected tab while the content scrolls
+    // down and expands again on scroll up.
+    val navBarScrollConnection = rememberFloatingTabBarScrollConnection(
+        inlineBehavior = FloatingTabBarInlineBehavior.OnScrollDown
+    )
+    LaunchedEffect(currentRoute) { navBarScrollConnection.expand() }
+
+    fun selectTab(tab: GhostNavTab) {
+        if (currentRoute == tab.route) {
+            navBarScrollConnection.expand()
+            return
+        }
+        navController.navigate(tab.route) {
+            popUpTo("home")
+            launchSingleTop = true
+        }
+    }
+
     // Telegram-style tab swipe: moves to the adjacent tab (index + delta) without
     // growing the back stack — same navigation the bottom nav uses.
     fun swipeToAdjacentTab(delta: Int) {
@@ -415,7 +439,16 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
                         animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
                     ) + fadeOut(animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)),
                 ) {
-                    BottomNav(navController, currentRoute)
+                    GhostConvxNavigationBar(
+                        selectedRoute = currentRoute,
+                        onTabSelected = { tab -> selectTab(tab) },
+                        scrollConnection = navBarScrollConnection,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 8.dp, bottom = 12.dp)
+                    )
                 }
             }
         },
@@ -429,12 +462,14 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier.padding(
-                top = if (isTabRoute) innerPadding.calculateTopPadding() else 0.dp,
-                bottom = if (isTabRoute) innerPadding.calculateBottomPadding() else 0.dp,
-                start = if (isTabRoute) innerPadding.calculateStartPadding(layoutDirection) else 0.dp,
-                end = if (isTabRoute) innerPadding.calculateEndPadding(layoutDirection) else 0.dp
-            ),
+            modifier = Modifier
+                .nestedScroll(navBarScrollConnection)
+                .padding(
+                    top = if (isTabRoute) innerPadding.calculateTopPadding() else 0.dp,
+                    bottom = if (isTabRoute) innerPadding.calculateBottomPadding() else 0.dp,
+                    start = if (isTabRoute) innerPadding.calculateStartPadding(layoutDirection) else 0.dp,
+                    end = if (isTabRoute) innerPadding.calculateEndPadding(layoutDirection) else 0.dp
+                ),
         ) {
             composable(
                 "home",
@@ -648,167 +683,3 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
     }
     }
 }
-
-@Composable
-fun BottomNav(navController: NavHostController, currentRoute: String?) {
-    val routes = listOf("home", "audio", "settings")
-    val labels = listOf("Home", "Audio", "Settings")
-    val icons = listOf(
-        painterResource(id = R.drawable.ic_home),
-        painterResource(id = R.drawable.ic_music),
-        painterResource(id = R.drawable.ic_settings)
-    )
-    val currentIndex = routes.indexOf(currentRoute).coerceAtLeast(0)
-    val density = LocalDensity.current
-
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    // Keep the exact existing capsule geometry, but tint the moving selected
-    // segment with the active app colour from Appearance settings.
-    val trackBg = if (isDark) Color.White.copy(alpha = 0.045f) else Color.Black.copy(alpha = 0.035f)
-    val trackBorder = if (isDark) Color.White.copy(alpha = 0.075f) else Color.Black.copy(alpha = 0.06f)
-    val thumbBg = MaterialTheme.colorScheme.primary
-    val activeColor = MaterialTheme.colorScheme.onPrimary
-    val inactiveColor = if (isDark) Color.White.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.38f)
-
-    fun navigateTo(idx: Int) {
-        navController.navigate(routes[idx]) {
-            popUpTo("home")
-            launchSingleTop = true
-        }
-    }
-
-    val trackHeight = 56.dp
-    val pad = 5.dp
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(trackHeight)
-                .clip(CircleShape)
-                .background(trackBg)
-                .border(1.dp, trackBorder, CircleShape)
-                .padding(pad)
-        ) {
-            val segWidth = maxWidth / routes.size
-            // Professional spring-driven pill (the standard used by polished
-            // animated bottom-nav libraries): spring physics accelerates and
-            // settles naturally, unlike a mechanical tween. Still a single-value
-            // animateDpAsState — only the pill's offset recomposes per frame, so
-            // performance stays flat.
-            val thumbOffset by animateDpAsState(
-                targetValue = segWidth * currentIndex,
-                animationSpec = spring(
-                    stiffness = Spring.StiffnessMediumLow,
-                    dampingRatio = Spring.DampingRatioNoBouncy
-                ),
-                label = "bottomNavThumb"
-            )
-
-            Box(
-                modifier = Modifier
-                    .graphicsLayer { translationX = with(density) { thumbOffset.toPx() } }
-                    .width(segWidth)
-                    .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(thumbBg)
-            )
-
-            Row(modifier = Modifier.matchParentSize()) {
-                for (i in routes.indices) {
-                    BottomNavSegment(
-                        icon = icons[i],
-                        label = labels[i],
-                        isActive = currentIndex == i,
-                        activeColor = activeColor,
-                        inactiveColor = inactiveColor,
-                        onClick = { if (currentIndex != i) navigateTo(i) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RowScope.BottomNavSegment(
-    icon: Any,
-    label: String,
-    isActive: Boolean,
-    activeColor: Color,
-    inactiveColor: Color,
-    onClick: () -> Unit
-) {
-    val tint by animateColorAsState(
-        targetValue = if (isActive) activeColor else inactiveColor,
-        animationSpec = tween(180, easing = FastOutSlowInEasing),
-        label = "bottomNavTint"
-    )
-
-    // Subtle scale "pop" on the active icon — springy, no layout cost
-    // (graphicsLayer transform only, not a recomposition-heavy size change).
-    val iconScale by animateFloatAsState(
-        targetValue = if (isActive) 1.14f else 1f,
-        animationSpec = spring(
-            stiffness = Spring.StiffnessMedium,
-            dampingRatio = Spring.DampingRatioNoBouncy
-        ),
-        label = "bottomNavIconScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .weight(1f)
-            .fillMaxHeight()
-            .clip(CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (icon is androidx.compose.ui.graphics.vector.ImageVector) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = tint,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .graphicsLayer {
-                            scaleX = iconScale
-                            scaleY = iconScale
-                        }
-                )
-            } else {
-                Icon(
-                    painter = icon as androidx.compose.ui.graphics.painter.Painter,
-                    contentDescription = label,
-                    tint = tint,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .graphicsLayer {
-                            scaleX = iconScale
-                            scaleY = iconScale
-                        }
-                )
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = label,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Medium,
-                color = tint,
-                maxLines = 1
-            )
-        }
-    }
-}
-
