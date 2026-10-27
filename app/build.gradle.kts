@@ -54,9 +54,10 @@ android {
 
     testOptions {
         unitTests {
-            // Plain JVM unit tests (audio processor maths, notification action
-            // mapping, settings key filtering). Android stubs return defaults.
+            // Plain JVM unit tests (notification action mapping, settings key
+            // filtering) plus Robolectric UI tests for the navigation bar.
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true
         }
     }
 
@@ -122,4 +123,9 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

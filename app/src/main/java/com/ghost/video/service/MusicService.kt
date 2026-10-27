@@ -12,7 +12,6 @@ import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -35,9 +34,6 @@ class MusicService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
-
-    // "Volume Boost 200%" runs here, not on ExoPlayer.volume (which is clamped to 0..1).
-    private val volumeBoostProcessor = VolumeBoostAudioProcessor()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _currentAudio = MutableStateFlow<LocalAudio?>(null)
@@ -140,7 +136,6 @@ class MusicService : MediaSessionService() {
                 _relayCurrentAudio.value = null
                 _relayIsPlaying.value = false
                 service.playlist = emptyList()
-                service.volumeBoostProcessor.gain = 1f
                 service.stopForeground(STOP_FOREGROUND_REMOVE)
                 if (instance === service) instance = null
                 service.stopSelf()
@@ -162,26 +157,37 @@ class MusicService : MediaSessionService() {
         _currentAudio.value = audio
         _relayCurrentAudio.value = audio
 
-        // "Volume Boost 200%" is applied by the audio processor, never by
-        // ExoPlayer.volume (which clamps to 1f and so used to do nothing).
-        serviceScope.launch {
-            val boosted = SettingsRepository(this@MusicService).volumeBoostEnabled.first()
-            volumeBoostProcessor.gain = if (boosted) 2f else 1f
-            player?.volume = 1f
-        }
+        // Volume stays at the player's own 0..1 range (ExoPlayer clamps anything
+        // above 1f anyway). No custom DSP sits in the audio pipeline: a fault in
+        // one there would abort music AND video playback.
+        player?.volume = 1f
     }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
 
-        val renderersFactory = VolumeBoostRenderersFactory(
-            this,
-            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON,
-            volumeBoostProcessor,
-        )
+        player = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build().apply {
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        // Surface the failure and clear the mini player instead of
+                        // leaving it stuck on a track that cannot be decoded.
+                        _isPlaying.value = false
+                        _relayIsPlaying.value = false
+                        _currentAudio.value = null
+                        _relayCurrentAudio.value = null
+                    }
+                })
 
-        player = ExoPlayer.Builder(this).setRenderersFactory(renderersFactory).build().apply {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying

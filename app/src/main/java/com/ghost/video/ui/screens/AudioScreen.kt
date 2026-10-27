@@ -181,14 +181,14 @@ fun AudioScreen(
         }
     }
 
-    // If the playing file was deleted (or disappeared from MediaStore), stop the
-    // service instead of leaving the mini player on a track that no longer exists.
-    LaunchedEffect(currentAudio?.uri, localAudios, isLoadingPage) {
-        val playing = currentAudio ?: return@LaunchedEffect
-        if (isLoadingPage || localAudios.isEmpty()) return@LaunchedEffect
-        if (localAudios.none { it.uri == playing.uri }) {
+    // Stop playback only when the track that is playing is the one being deleted.
+    // (An earlier version stopped playback whenever the playing track was missing
+    // from the refreshed page list, which could kill music that was playing fine.)
+    val onAudioDeleted: (LocalAudio) -> Unit = { deleted ->
+        if (currentAudio?.uri == deleted.uri) {
             viewModel.stop(context)
         }
+        refreshKey++
     }
 
     Column(
@@ -278,7 +278,8 @@ fun AudioScreen(
                             audio = audio,
                             isPlaying = currentAudio?.uri == audio.uri,
                             onClick = { viewModel.playAudio(context, audio) },
-                            onChanged = { refreshKey++ }
+                            onChanged = { refreshKey++ },
+                            onDeleted = onAudioDeleted
                         )
                     }
 
@@ -375,7 +376,8 @@ fun AudioListItem(
     audio: LocalAudio,
     isPlaying: Boolean = false,
     onClick: () -> Unit,
-    onChanged: () -> Unit = {}
+    onChanged: () -> Unit = {},
+    onDeleted: (LocalAudio) -> Unit = {}
 ) {
     val context = LocalContext.current
     val containerColor by animateColorAsState(
@@ -393,7 +395,7 @@ fun AudioListItem(
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             Toast.makeText(context, "Audio deleted", Toast.LENGTH_SHORT).show()
-            onChanged()
+            onDeleted(audio)
         }
     }
 

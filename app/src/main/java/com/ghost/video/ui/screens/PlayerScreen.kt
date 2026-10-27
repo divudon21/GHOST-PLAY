@@ -75,6 +75,7 @@ import android.util.TypedValue
 import android.view.ContextThemeWrapper
 import android.widget.ImageView
 import android.widget.PopupMenu
+import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -315,20 +316,49 @@ fun PlayerScreen(url: String) {
         }
         val extractorsFactory = DefaultExtractorsFactory()
 
-        // "Volume Boost 200%" has to be applied in the audio pipeline: ExoPlayer
-        // clamps its own volume to 0..1, so `volume = 2f` used to do nothing.
-        // One processor per player instance; it is not reusable across sinks.
-        val volumeBoostProcessor = com.ghost.video.service.VolumeBoostAudioProcessor()
-
-        ExoPlayer.Builder(context)
+        // Standard ExoPlayer setup (same as NextPlayer): renderers factory with
+        // the chosen extension mode, an explicit media audio focus request, and
+        // no custom audio processors in the pipeline.
+        fun buildPlayer(mode: Int): ExoPlayer = ExoPlayer.Builder(context)
             .setRenderersFactory(
-                com.ghost.video.service.VolumeBoostRenderersFactory(
-                    context, extensionMode, volumeBoostProcessor
-                )
+                DefaultRenderersFactory(context).setExtensionRendererMode(mode)
             )
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory))
-            .build().apply {
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory)
+            )
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+
+        // If the software (ffmpeg) extension renderers cannot be created on this
+        // device, fall back to the platform decoders instead of leaving the
+        // screen without any player at all.
+        val player = try {
+            buildPlayer(extensionMode)
+        } catch (t: Throwable) {
+            if (extensionMode == DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF) throw t
+            buildPlayer(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+        }
+
+        player.apply {
+                // Surface playback errors instead of a silent black screen, so a
+                // codec problem is visible in the UI (and reportable).
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Toast.makeText(
+                            context,
+                            "Cannot play this video (${error.errorCodeName})",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                })
                 setMediaItem(MediaItem.fromUri(url))
                 
                 coroutineScope.launch {
@@ -388,11 +418,12 @@ fun PlayerScreen(url: String) {
 
                     // Default playback speed, volume boost and autoplay toggles.
                     val defaultSpeed = settingsRepository.defaultPlaybackSpeed.first()
-                    val boostEnabled = settingsRepository.volumeBoostEnabled.first()
+                    // The "Volume Boost" preference is stored, but ExoPlayer cannot
+                    // exceed 100% and no custom DSP is used (it broke playback).
+                    settingsRepository.volumeBoostEnabled.first()
                     val shouldAutoplay = settingsRepository.autoplay.first()
 
                     playbackParameters = PlaybackParameters(defaultSpeed.coerceIn(0.25f, 3f))
-                    volumeBoostProcessor.gain = if (boostEnabled) 2f else 1f
                     volume = 1f
 
                     prepare()
