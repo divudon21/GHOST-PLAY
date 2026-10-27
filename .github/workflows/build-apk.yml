@@ -61,16 +61,19 @@ jobs:
       - name: Inspect APKs
         if: steps.build.outcome == 'success'
         run: |
-          for apk in output/*.apk; do
-            echo "===== $apk"
-            unzip -l "$apk" | grep -E "lib/" | awk '{print $4}' | sed 's|/[^/]*$||' | sort -u
-            unzip -l "$apk" | grep -c "classes.*dex" | sed 's/^/dex files: /'
-          done
-          BADGING=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
-          for apk in output/*.apk; do
-            echo "===== badging $apk"
-            "$BADGING" dump badging "$apk" 2>/dev/null | grep -E "^package|sdkVersion|targetSdkVersion|native-code"
-          done
+          mkdir -p ci
+          {
+            for apk in output/*.apk; do
+              echo "===== $apk"
+              unzip -l "$apk" | grep -E "lib/" | awk '{print $4}' | sed 's|/[^/]*$||' | sort -u
+              echo "dex files: $(unzip -l "$apk" | grep -c 'classes.*dex')"
+            done
+            BADGING=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+            for apk in output/*.apk; do
+              echo "===== badging $apk"
+              "$BADGING" dump badging "$apk" 2>/dev/null | grep -E "^package|sdkVersion|targetSdkVersion|native-code" || true
+            done
+          } | tee ci/inspect.txt
 
       - name: Upload APKs
         if: steps.build.outcome == 'success'
@@ -99,6 +102,16 @@ jobs:
           git config user.email "ci@ghost.local"
           git add -f ci/last-build.log
           git commit -m "ci: failed build log" || true
+          git push origin HEAD:refs/heads/ci-log --force
+
+      - name: Publish APK inspection (success)
+        if: steps.build.outcome == 'success'
+        run: |
+          git config user.name "ghost-ci"
+          git config user.email "ci@ghost.local"
+          git checkout -b ci-log-out
+          git add -f ci/inspect.txt
+          git commit -m "ci: apk inspection" || true
           git push origin HEAD:refs/heads/ci-log --force
 
       - name: Fail the run when the build failed
