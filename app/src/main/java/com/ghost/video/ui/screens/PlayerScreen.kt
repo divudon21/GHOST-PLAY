@@ -313,25 +313,20 @@ fun PlayerScreen(url: String) {
             DecoderPriority.PREFER_APP -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             DecoderPriority.DEVICE_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
         }
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(extensionMode)
-            
         val extractorsFactory = DefaultExtractorsFactory()
 
         // "Volume Boost 200%" has to be applied in the audio pipeline: ExoPlayer
         // clamps its own volume to 0..1, so `volume = 2f` used to do nothing.
         // One processor per player instance; it is not reusable across sinks.
         val volumeBoostProcessor = com.ghost.video.service.VolumeBoostAudioProcessor()
-        val audioSink = androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
-            .setAudioProcessors(
-                arrayOf<androidx.media3.common.audio.AudioProcessor>(volumeBoostProcessor)
-            )
-            .build()
 
         ExoPlayer.Builder(context)
-            .setRenderersFactory(renderersFactory)
+            .setRenderersFactory(
+                com.ghost.video.service.VolumeBoostRenderersFactory(
+                    context, extensionMode, volumeBoostProcessor
+                )
+            )
             .setTrackSelector(trackSelector)
-            .setAudioSink(audioSink)
             .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory))
             .build().apply {
                 setMediaItem(MediaItem.fromUri(url))

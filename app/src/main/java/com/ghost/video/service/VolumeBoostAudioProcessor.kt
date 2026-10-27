@@ -31,7 +31,7 @@ class VolumeBoostAudioProcessor : BaseAudioProcessor() {
         val currentGain = gain
         val remaining = inputBuffer.remaining()
         val outputBuffer = replaceOutputBuffer(remaining)
-        val encoding = inputAudioFormat.pcmEncoding
+        val encoding = inputAudioFormat.encoding
 
         when (encoding) {
             C.ENCODING_PCM_16BIT -> {

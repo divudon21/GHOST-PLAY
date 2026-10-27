@@ -70,11 +70,13 @@ fun GhostConvxNavigationBar(
     modifier: Modifier = Modifier,
 ) {
     // Keep the bridged scheme aligned with the live app theme (used by the vendored defaults).
-    SideEffect { AppTheme.colorScheme = MaterialTheme.colorScheme }
+    // The theme is read here, in composition; SideEffect's lambda is not composable.
+    val appColorScheme = MaterialTheme.colorScheme
+    SideEffect { AppTheme.colorScheme = appColorScheme }
 
-    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    val selectedIconColor = MaterialTheme.colorScheme.primary
-    val unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f)
+    val backgroundColor = appColorScheme.surfaceContainerHigh
+    val selectedIconColor = appColorScheme.primary
+    val unselectedIconColor = appColorScheme.onSurface.copy(alpha = 0.82f)
 
     // Detail routes keep the indicator on the last tab (Convx's sticky route).
     var stickyRoute by rememberSaveable {

@@ -11,10 +11,9 @@ import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.ghost.video.MainActivity
@@ -176,11 +175,13 @@ class MusicService : MediaSessionService() {
         super.onCreate()
         instance = this
 
-        val audioSink = DefaultAudioSink.Builder(this)
-            .setAudioProcessors(arrayOf<AudioProcessor>(volumeBoostProcessor))
-            .build()
+        val renderersFactory = VolumeBoostRenderersFactory(
+            this,
+            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON,
+            volumeBoostProcessor,
+        )
 
-        player = ExoPlayer.Builder(this).setAudioSink(audioSink).build().apply {
+        player = ExoPlayer.Builder(this).setRenderersFactory(renderersFactory).build().apply {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
