@@ -87,8 +87,11 @@ import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
 import com.ghost.video.ui.components.AppLoadingIndicator
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -312,6 +315,11 @@ fun PlayerScreen(url: String) {
     val trackSelector = remember {
         DefaultTrackSelector(context)
     }
+
+    // Playback diagnostics. A decode/container/URI failure used to leave a black
+    // screen with no sound and no explanation; now it is shown and copyable.
+    var playbackError by remember { mutableStateOf<androidx.media3.common.PlaybackException?>(null) }
+    var playbackFailure by remember { mutableStateOf<Throwable?>(null) }
     
     val exoPlayer = remember(decoderPriority) {
         val extensionMode = when (decoderPriority) {
@@ -342,9 +350,9 @@ fun PlayerScreen(url: String) {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        // If the software (ffmpeg) extension renderers cannot be created on this
-        // device, fall back to the platform decoders instead of leaving the
-        // screen without any player at all.
+        // If the extension (software) renderers cannot be created on this device,
+        // fall back to the platform decoders instead of leaving the screen without
+        // any player at all.
         val player = try {
             buildPlayer(extensionMode)
         } catch (t: Throwable) {
@@ -353,88 +361,98 @@ fun PlayerScreen(url: String) {
         }
 
         player.apply {
-                // Surface playback errors instead of a silent black screen, so a
-                // codec problem is visible in the UI (and reportable).
-                addListener(object : Player.Listener {
-                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        Toast.makeText(
-                            context,
-                            "Cannot play this video (${error.errorCodeName})",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                })
-                setMediaItem(MediaItem.fromUri(url))
-                
-                coroutineScope.launch {
-                    val resumePlayback = settingsRepository.resumePlayback.first()
-                    val rememberSelections = settingsRepository.rememberSelections.first()
-                    val savedPosition = settingsRepository.getPlaybackPosition(url).first()
-                    val savedAudioId = settingsRepository.getAudioTrack(url).first()
-                    val savedTextId = settingsRepository.getTextTrack(url).first()
-
-                    if (resumePlayback && savedPosition > 0) {
-                        seekTo(savedPosition)
-                    }
-
-                    if (rememberSelections) {
-                        addListener(object : Player.Listener {
-                            override fun onTracksChanged(tracks: Tracks) {
-                                var paramsBuilder = trackSelectionParameters.buildUpon()
-                                var changed = false
-
-                                if (savedAudioId.isNotEmpty()) {
-                                    for (group in tracks.groups) {
-                                        if (group.type == C.TRACK_TYPE_AUDIO) {
-                                            for (i in 0 until group.length) {
-                                                val format = group.getTrackFormat(i)
-                                                if (format.id == savedAudioId || format.language == savedAudioId) {
-                                                    paramsBuilder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(i)))
-                                                    changed = true
-                                                    break
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (savedTextId.isNotEmpty()) {
-                                    for (group in tracks.groups) {
-                                        if (group.type == C.TRACK_TYPE_TEXT) {
-                                            for (i in 0 until group.length) {
-                                                val format = group.getTrackFormat(i)
-                                                if (format.id == savedTextId || format.language == savedTextId) {
-                                                    paramsBuilder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(i)))
-                                                    changed = true
-                                                    break
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (changed) {
-                                    trackSelectionParameters = paramsBuilder.build()
-                                }
-                                removeListener(this)
-                            }
-                        })
-                    }
-
-                    // Default playback speed, volume boost and autoplay toggles.
-                    val defaultSpeed = settingsRepository.defaultPlaybackSpeed.first()
-                    // The "Volume Boost" preference is stored, but ExoPlayer cannot
-                    // exceed 100% and no custom DSP is used (it broke playback).
-                    settingsRepository.volumeBoostEnabled.first()
-                    val shouldAutoplay = settingsRepository.autoplay.first()
-
-                    playbackParameters = PlaybackParameters(defaultSpeed.coerceIn(0.25f, 3f))
-                    volume = 1f
-
-                    prepare()
-                    playWhenReady = shouldAutoplay
+            // Any failure has to be VISIBLE: the screen is black otherwise and the
+            // user has no idea whether the file, the codec or the container failed.
+            addListener(object : Player.Listener {
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    playbackError = error
                 }
+            })
+            setMediaItem(MediaItem.fromUri(url))
+        }
+    }
+
+    // Playback is started here, NOT inside the player builder, and it is started
+    // BEFORE the saved settings are read. The old code awaited six DataStore reads
+    // and only then called prepare(); any delay, cancellation or exception in that
+    // coroutine left the player IDLE forever - a black screen with no audio, no
+    // spinner and no error, which is exactly the reported symptom.
+    LaunchedEffect(exoPlayer) {
+        withContext(Dispatchers.Main.immediate) {
+            runCatching {
+                exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
+            }.onFailure { playbackFailure = it }
+
+            // Saved resume position / track selection / speed / autoplay. All of
+            // this is cosmetic: it must never be able to stop playback.
+            runCatching {
+                val resumePlayback = settingsRepository.resumePlayback.first()
+                val savedPosition = settingsRepository.getPlaybackPosition(url).first()
+                if (resumePlayback && savedPosition > 0) {
+                    exoPlayer.seekTo(savedPosition)
+                }
+
+                val defaultSpeed = settingsRepository.defaultPlaybackSpeed.first()
+                exoPlayer.playbackParameters =
+                    PlaybackParameters(defaultSpeed.coerceIn(0.25f, 3f))
+                exoPlayer.volume = 1f
+                exoPlayer.playWhenReady = settingsRepository.autoplay.first()
             }
+
+            runCatching {
+                if (!settingsRepository.rememberSelections.first()) return@runCatching
+                val savedAudioId = settingsRepository.getAudioTrack(url).first()
+                val savedTextId = settingsRepository.getTextTrack(url).first()
+                if (savedAudioId.isEmpty() && savedTextId.isEmpty()) return@runCatching
+
+                var applied = false
+                val listener = object : Player.Listener {
+                    override fun onTracksChanged(tracks: Tracks) {
+                        if (applied) return
+                        var paramsBuilder = exoPlayer.trackSelectionParameters.buildUpon()
+                        var changed = false
+
+                        if (savedAudioId.isNotEmpty()) {
+                            for (group in tracks.groups) {
+                                if (group.type != C.TRACK_TYPE_AUDIO) continue
+                                for (i in 0 until group.length) {
+                                    val format = group.getTrackFormat(i)
+                                    if (format.id == savedAudioId || format.language == savedAudioId) {
+                                        paramsBuilder.setOverrideForType(
+                                            TrackSelectionOverride(group.mediaTrackGroup, listOf(i))
+                                        )
+                                        changed = true
+                                        break
+                                    }
+                                }
+                            }
+                        }
+
+                        if (savedTextId.isNotEmpty()) {
+                            for (group in tracks.groups) {
+                                if (group.type != C.TRACK_TYPE_TEXT) continue
+                                for (i in 0 until group.length) {
+                                    val format = group.getTrackFormat(i)
+                                    if (format.id == savedTextId || format.language == savedTextId) {
+                                        paramsBuilder.setOverrideForType(
+                                            TrackSelectionOverride(group.mediaTrackGroup, listOf(i))
+                                        )
+                                        changed = true
+                                        break
+                                    }
+                                }
+                            }
+                        }
+
+                        if (changed) exoPlayer.trackSelectionParameters = paramsBuilder.build()
+                        applied = true
+                        exoPlayer.removeListener(this)
+                    }
+                }
+                exoPlayer.addListener(listener)
+            }
+        }
     }
 
     // System Auto-PiP: keep the player reference (MainActivity checks it in
@@ -574,6 +592,11 @@ fun PlayerScreen(url: String) {
                     
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     keepScreenOn = !backgroundPlay
+                    // The controls are our own loading/error surface too: show them
+                    // at least once instead of leaving a bare black rectangle.
+                    useController = true
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    showController()
 
                     subtitleView?.apply {
                         if (systemCaptionStyle) {
@@ -865,6 +888,57 @@ fun PlayerScreen(url: String) {
             modifier = Modifier.fillMaxSize()
         )
 
+        // Playback failure panel (replaces a silent black screen).
+        val failure: Throwable? = playbackError ?: playbackFailure
+        if (failure != null && !inPip) {
+            PlaybackErrorPanel(
+                details = buildString {
+                    appendLine(url)
+                    if (failure is androidx.media3.common.PlaybackException) {
+                        appendLine("error: ${failure.errorCodeName} (${failure.errorCode})")
+                    } else {
+                        appendLine("error: ${failure::class.java.simpleName}")
+                    }
+                    failure.message?.let { appendLine("message: $it") }
+                    failure.cause?.let { appendLine("cause: ${it::class.java.simpleName}: ${it.message}") }
+                    playbackError?.let {
+                        appendLine("state: ${playerStateName(exoPlayer.playbackState)}")
+                        appendLine("position: ${exoPlayer.currentPosition} ms")
+                        appendLine("duration: ${exoPlayer.duration} ms")
+                    }
+                },
+                onRetry = {
+                    playbackError = null
+                    playbackFailure = null
+                    runCatching { exoPlayer.prepare() }
+                    exoPlayer.playWhenReady = true
+                },
+                onCopy = { text ->
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                            as? android.content.ClipboardManager
+                    clipboard?.setPrimaryClip(
+                        android.content.ClipData.newPlainText("Ghost Play error", text)
+                    )
+                    Toast.makeText(context, "Error details copied", Toast.LENGTH_SHORT).show()
+                },
+                onOpenExternal = {
+                    // Last resort: hand the file/stream to whatever else the user has.
+                    runCatching {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setDataAndType(
+                                android.net.Uri.parse(url),
+                                "video/*"
+                            )
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(intent)
+                    }.onFailure {
+                        Toast.makeText(context, "No other video player found", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
         // Keep the official Material 3 RoundedPolygon loading indicator centered
         // at the player controls while Media3 is buffering.
         AnimatedVisibility(
@@ -1055,6 +1129,74 @@ fun PlayerScreen(url: String) {
             onDismiss = { showAspectRatioDialog = false },
             dialogColors = dialogColors
         )
+    }
+}
+
+/** Human readable name for a Media3 playback state, used in the error panel. */
+internal fun playerStateName(state: Int): String = when (state) {
+    Player.STATE_IDLE -> "IDLE"
+    Player.STATE_BUFFERING -> "BUFFERING"
+    Player.STATE_READY -> "READY"
+    Player.STATE_ENDED -> "ENDED"
+    else -> "STATE_$state"
+}
+
+/**
+ * Shown in place of the player when playback fails. Without it a decode or
+ * container failure only produced a black screen, so the user had no way to tell
+ * a broken file from a broken app.
+ */
+@Composable
+private fun PlaybackErrorPanel(
+    details: String,
+    onRetry: () -> Unit,
+    onCopy: (String) -> Unit,
+    onOpenExternal: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.88f))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            color = Color(0xFF151515),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "This video could not be played",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = details.trim(),
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 11.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onRetry) { Text("Retry") }
+                    OutlinedButton(onClick = { onCopy(details) }) { Text("Copy") }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onOpenExternal,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Open in another app")
+                }
+            }
+        }
     }
 }
 

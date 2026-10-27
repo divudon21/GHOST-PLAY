@@ -728,10 +728,27 @@ fun MainApp(
                 popExitTransition = { FADE_OUT }
             ) { backStackEntry ->
                 val url = backStackEntry.arguments?.getString("url") ?: ""
-                val decodedUrl = URLDecoder.decode(url, "UTF-8")
-                PlayerScreen(url = decodedUrl)
+                PlayerScreen(url = normalizeRouteUrl(url))
             }
         }
     }
+    }
+}
+
+/**
+ * Navigation arguments arrive in the form the caller put them in: the app
+ * navigates with [URLEncoder], and navigation decodes path arguments itself on
+ * newer versions of the library. Decoding blindly therefore risked a double
+ * decode (a `%2B` in a stream URL turning into a space, breaking playback), so
+ * the string is only decoded when it is still percent-encoded.
+ */
+internal fun normalizeRouteUrl(raw: String): String {
+    if (raw.isEmpty()) return raw
+    // A real URI (content://, file://, https://, ...) means it is already decoded.
+    if (android.net.Uri.parse(raw).scheme != null) return raw
+    return try {
+        URLDecoder.decode(raw, "UTF-8")
+    } catch (_: Exception) {
+        raw
     }
 }

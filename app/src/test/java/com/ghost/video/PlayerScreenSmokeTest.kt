@@ -28,6 +28,9 @@ class PlayerScreenSmokeTest {
             }
         }
         composeRule.waitForIdle()
+        // Composition must not throw. A real play attempt is not possible here
+        // (Robolectric has no codecs), but the screen has to render rather than
+        // crash - and the failure panel must be able to describe an error.
         composeRule.onRoot().assertExists()
     }
 }
