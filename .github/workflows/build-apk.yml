@@ -58,6 +58,20 @@ jobs:
           ls -lh output
           test -n "$(ls -A output)" || { echo 'No APK was produced'; exit 1; }
 
+      - name: Inspect APKs
+        if: steps.build.outcome == 'success'
+        run: |
+          for apk in output/*.apk; do
+            echo "===== $apk"
+            unzip -l "$apk" | grep -E "lib/" | awk '{print $4}' | sed 's|/[^/]*$||' | sort -u
+            unzip -l "$apk" | grep -c "classes.*dex" | sed 's/^/dex files: /'
+          done
+          BADGING=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          for apk in output/*.apk; do
+            echo "===== badging $apk"
+            "$BADGING" dump badging "$apk" 2>/dev/null | grep -E "^package|sdkVersion|targetSdkVersion|native-code"
+          done
+
       - name: Upload APKs
         if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -80,7 +94,7 @@ jobs:
         if: failure()
         run: |
           mkdir -p ci
-          { echo '### unit tests (tail)'; tail -n 200 unit.log 2>/dev/null || true; echo; echo '### gradle output (tail)'; tail -n 600 build.log 2>/dev/null || true; } > ci/last-build.log
+          { echo '### inspect'; (ls -R output 2>/dev/null || true); echo; echo '### unit tests (tail)'; tail -n 200 unit.log 2>/dev/null || true; echo; echo '### gradle output (tail)'; tail -n 600 build.log 2>/dev/null || true; } > ci/last-build.log
           git config user.name "ghost-ci"
           git config user.email "ci@ghost.local"
           git add -f ci/last-build.log

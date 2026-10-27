@@ -87,6 +87,8 @@ import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
 import com.ghost.video.ui.components.AppLoadingIndicator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -214,10 +216,13 @@ fun PlayerScreen(url: String) {
             }
         }
         onDispose {
-            coroutineScope.launch {
-                if (settingsRepository.rememberBrightness.first()) {
-                    val current = activity?.window?.attributes?.screenBrightness ?: -1f
-                    if (current in 0f..1f) settingsRepository.saveBrightness(current)
+            val brightnessToSave = activity?.window?.attributes?.screenBrightness ?: -1f
+            // Same scope problem as the playback state above: the composition scope
+            // is already cancelled here, so the value has to be written from a scope
+            // that outlives this screen.
+            CoroutineScope(Dispatchers.IO).launch {
+                if (settingsRepository.rememberBrightness.first() && brightnessToSave in 0f..1f) {
+                    settingsRepository.saveBrightness(brightnessToSave)
                 }
             }
             activity?.window?.let { w ->
@@ -506,37 +511,39 @@ fun PlayerScreen(url: String) {
 
         onDispose {
             exoPlayer.removeListener(bufferingListener)
-            // The old `if (!SharedPlayer.isFloatingMode)` guard was dead code: the
-            // flag was never set to true, so the player was always released. In PiP
-            // the composition is not disposed, so releasing here is still correct.
-            run {
-                coroutineScope.launch {
-                    if (settingsRepository.resumePlayback.first()) {
-                        settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
-                    }
-                    
-                    val tracks = exoPlayer.currentTracks
-                    val rememberSelections = settingsRepository.rememberSelections.first()
-                    for (group in tracks.groups) {
-                        if (group.isSelected) {
-                            for (i in 0 until group.length) {
-                                if (group.isTrackSelected(i)) {
-                                    val format = group.getTrackFormat(i)
-                                    val idToSave = format.id ?: format.language ?: ""
-                                    if (idToSave.isNotEmpty() && rememberSelections) {
-                                        if (group.type == C.TRACK_TYPE_AUDIO) {
-                                            settingsRepository.saveAudioTrack(url, idToSave)
-                                        } else if (group.type == C.TRACK_TYPE_TEXT) {
-                                            settingsRepository.saveTextTrack(url, idToSave)
-                                        }
-                                    }
-                                    break
+            // Read everything we still need from the player BEFORE releasing it:
+            // querying a released player throws, and the old code did exactly that
+            // from a coroutine that ran after release().
+            val lastPosition = exoPlayer.currentPosition
+            val lastTracks = exoPlayer.currentTracks
+            exoPlayer.release()
+
+            // rememberCoroutineScope() is cancelled as this composable leaves, so a
+            // launch on it never ran: the resume position and the chosen tracks were
+            // silently never saved. A short-lived scope of its own completes the write.
+            CoroutineScope(Dispatchers.IO).launch {
+                if (settingsRepository.resumePlayback.first()) {
+                    settingsRepository.savePlaybackPosition(url, lastPosition)
+                }
+                val rememberSelections = settingsRepository.rememberSelections.first()
+                if (!rememberSelections) return@launch
+                for (group in lastTracks.groups) {
+                    if (!group.isSelected) continue
+                    for (i in 0 until group.length) {
+                        if (group.isTrackSelected(i)) {
+                            val format = group.getTrackFormat(i)
+                            val idToSave = format.id ?: format.language ?: ""
+                            if (idToSave.isNotEmpty()) {
+                                if (group.type == C.TRACK_TYPE_AUDIO) {
+                                    settingsRepository.saveAudioTrack(url, idToSave)
+                                } else if (group.type == C.TRACK_TYPE_TEXT) {
+                                    settingsRepository.saveTextTrack(url, idToSave)
                                 }
                             }
+                            break
                         }
                     }
                 }
-                exoPlayer.release()
             }
         }
     }
