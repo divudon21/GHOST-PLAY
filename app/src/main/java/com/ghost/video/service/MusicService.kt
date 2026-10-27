@@ -11,8 +11,10 @@ import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.ghost.video.MainActivity
@@ -34,6 +36,9 @@ class MusicService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
+
+    // "Volume Boost 200%" runs here, not on ExoPlayer.volume (which is clamped to 0..1).
+    private val volumeBoostProcessor = VolumeBoostAudioProcessor()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _currentAudio = MutableStateFlow<LocalAudio?>(null)
@@ -94,7 +99,15 @@ class MusicService : MediaSessionService() {
 
         fun togglePlayPause() {
             instance?.player?.let { player ->
-                player.playWhenReady = !player.isPlaying
+                // `!player.isPlaying` reads false while buffering, so tapping pause
+                // during a buffer stall used to just re-arm playback. playWhenReady
+                // is the intent flag and stays correct through buffering.
+                if (player.playbackState == Player.STATE_ENDED) {
+                    player.seekToDefaultPosition()
+                    player.playWhenReady = true
+                } else {
+                    player.playWhenReady = !player.playWhenReady
+                }
             }
         }
 
@@ -128,7 +141,9 @@ class MusicService : MediaSessionService() {
                 _relayCurrentAudio.value = null
                 _relayIsPlaying.value = false
                 service.playlist = emptyList()
+                service.volumeBoostProcessor.gain = 1f
                 service.stopForeground(STOP_FOREGROUND_REMOVE)
+                if (instance === service) instance = null
                 service.stopSelf()
             }
         }
@@ -148,9 +163,12 @@ class MusicService : MediaSessionService() {
         _currentAudio.value = audio
         _relayCurrentAudio.value = audio
 
-        // Respect the "Volume Boost 200%" setting for the audio player.
+        // "Volume Boost 200%" is applied by the audio processor, never by
+        // ExoPlayer.volume (which clamps to 1f and so used to do nothing).
         serviceScope.launch {
-            player?.volume = if (SettingsRepository(this@MusicService).volumeBoostEnabled.first()) 2f else 1f
+            val boosted = SettingsRepository(this@MusicService).volumeBoostEnabled.first()
+            volumeBoostProcessor.gain = if (boosted) 2f else 1f
+            player?.volume = 1f
         }
     }
 
@@ -158,7 +176,11 @@ class MusicService : MediaSessionService() {
         super.onCreate()
         instance = this
 
-        player = ExoPlayer.Builder(this).build().apply {
+        val audioSink = DefaultAudioSink.Builder(this)
+            .setAudioProcessors(arrayOf<AudioProcessor>(volumeBoostProcessor))
+            .build()
+
+        player = ExoPlayer.Builder(this).setAudioSink(audioSink).build().apply {
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
@@ -339,11 +361,15 @@ class MusicService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Show actions in compact view: prev, play/pause, next
+        // Show actions in compact view. The indices refer to the actions added
+        // BELOW, so they must match that layout: with a single-item playlist only
+        // play/pause exists and it is action 0. Requesting index 1 there was an
+        // out-of-bounds crash (IllegalArgumentException while building the
+        // notification) whenever a playlist had just one track.
         val compactActions = if (hasNext) {
-            intArrayOf(0, 1, 2)
+            intArrayOf(0, 1, 2) // previous, play/pause, next
         } else {
-            intArrayOf(1)
+            intArrayOf(0) // play/pause only
         }
 
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()

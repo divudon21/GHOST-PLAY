@@ -37,6 +37,9 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,7 +111,10 @@ fun AudioScreen(
                 limit = AUDIO_PAGE_SIZE,
                 offset = offsetToLoad
             )
-            localAudios = if (offsetToLoad == 0) page else localAudios + page
+            // distinctBy: MediaStore offsets shift when files are added/removed, so
+            // paging can return rows that are already on screen. Duplicate keys
+            // would crash the LazyColumn.
+            localAudios = if (offsetToLoad == 0) page else (localAudios + page).distinctBy { it.uri }
             nextOffset = offsetToLoad + page.size
             hasMorePages = page.size == AUDIO_PAGE_SIZE
             viewModel.setPlaylist(localAudios)
@@ -117,32 +123,71 @@ fun AudioScreen(
         }
     }
 
+    // Re-read the permission when the user grants it from the system Settings app;
+    // previously the screen stayed on "Storage permission required" until restart.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = checkAudioPermission(context)
+                if (granted != hasPermission) hasPermission = granted
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    /** Re-reads page one and merges in audio added/removed while the app was open. */
+    fun refreshFirstPage() {
+        scope.launch {
+            val page = loadLocalAudiosPage(context, AUDIO_PAGE_SIZE, 0)
+            val pageUris = page.map { it.uri }.toSet()
+            val merged = page + localAudios.filter { it.uri !in pageUris }
+            if (merged.map { it.uri } != localAudios.map { it.uri }) {
+                localAudios = merged
+                cachedAudios = merged
+                viewModel.setPlaylist(merged)
+            }
+            if (page.size < AUDIO_PAGE_SIZE) {
+                // Fewer than a full page means the library now fits in one page.
+                nextOffset = merged.size
+                hasMorePages = false
+            }
+        }
+    }
+
     LaunchedEffect(hasPermission, refreshKey) {
         if (hasPermission) {
             val cached = cachedAudios
-            if (refreshKey > 0) {
-                // A rename/delete happened: full re-scan from page one.
-                cachedAudios = null
-                localAudios = emptyList()
-                nextOffset = 0
-                hasMorePages = true
-                isLoadingPage = false
-                loadNextPage()
-            } else if (cached == null) {
-                localAudios = emptyList()
+            if (cached == null || refreshKey > 0) {
+                // Reload from page one, but keep the current rows on screen while
+                // it happens: clearing the list first reset the scroll position and
+                // flashed an empty state after every rename/delete.
                 nextOffset = 0
                 hasMorePages = true
                 isLoadingPage = false
                 loadNextPage()
             } else {
-                // Returning to the tab: restore from cache, no re-query.
+                // Returning to the tab: restore from cache, then quietly re-check
+                // the first page so newly added files appear without a restart.
                 localAudios = cached
                 nextOffset = cached.size
                 hasMorePages = cached.size % AUDIO_PAGE_SIZE == 0
                 viewModel.setPlaylist(cached)
+                refreshFirstPage()
             }
         } else {
             permissionLauncher.launch(permissionToRequest)
+        }
+    }
+
+    // If the playing file was deleted (or disappeared from MediaStore), stop the
+    // service instead of leaving the mini player on a track that no longer exists.
+    LaunchedEffect(currentAudio?.uri, localAudios, isLoadingPage) {
+        val playing = currentAudio ?: return@LaunchedEffect
+        if (isLoadingPage || localAudios.isEmpty()) return@LaunchedEffect
+        if (localAudios.none { it.uri == playing.uri }) {
+            viewModel.stop(context)
         }
     }
 

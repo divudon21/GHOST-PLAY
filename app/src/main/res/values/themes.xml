@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The app used to launch with @android:style/Theme.Material.Light.NoActionBar,
+      which painted a white window behind the Compose content even in dark mode
+      (the visible white flash on every cold start). This theme keeps the window
+      background in sync with the active light/dark configuration.
+    -->
+    <style name="Theme.GhostPlay" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ghost_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

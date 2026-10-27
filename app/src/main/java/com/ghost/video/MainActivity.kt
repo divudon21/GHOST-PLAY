@@ -178,6 +178,38 @@ private val TAB_EXIT =
     fadeOut(animationSpec = tween(durationMillis = TAB_FADE_DURATION, easing = FastOutSlowInEasing))
 
 class MainActivity : ComponentActivity() {
+    // Latest external video handed to us through an ACTION_VIEW intent. Kept as
+    // state so a second "Open with Ghost Play" while the app is already running
+    // (which arrives on onNewIntent, not onCreate) is opened too.
+    private var pendingExternalUrl by mutableStateOf<String?>(null)
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { /* No UI depends on the answer; the media notification simply shows or not. */ }
+
+    private fun readExternalVideoUrl(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW) {
+            intent.data?.toString()?.let { pendingExternalUrl = it }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Without this, an ACTION_VIEW intent delivered while the activity was
+        // already alive was silently dropped: the player only ever read the
+        // launch intent inside onCreate.
+        readExternalVideoUrl(intent)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        SharedPlayer.isInPictureInPicture.value = isInPictureInPictureMode
+    }
+
     // Auto Picture-in-Picture (system): when the user leaves the app while a
     // video is playing, enter system PiP. Android 12+ (S) handles this through
     // setAutoEnterEnabled(), so this covers Android 7–11 (back/home button).
@@ -203,13 +235,25 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        
+        // enableEdgeToEdge() must run after super.onCreate(); calling it before
+        // was harmless but wrong (it touches the window the superclass sets up).
+        enableEdgeToEdge()
+
+        SharedPlayer.appContext = applicationContext
         // Check if app was opened via an external intent (like a file manager)
-        var externalVideoUrl: String? = null
-        if (intent?.action == Intent.ACTION_VIEW) {
-            externalVideoUrl = intent.data?.toString()
+        readExternalVideoUrl(intent)
+
+        // Android 13+: the media notification (and its play/pause controls) is
+        // invisible without POST_NOTIFICATIONS. The permission was declared but
+        // only ever requested from the App-update settings page, so music
+        // controls never appeared for most users.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
         // If the user previously enabled update notifications, make sure the daily
@@ -257,7 +301,10 @@ class MainActivity : ComponentActivity() {
                 boldText = startupTheme?.boldText ?: false,
                 highContrastDark = startupTheme?.highContrastDark ?: false
             ) {
-                MainApp(externalVideoUrl = externalVideoUrl)
+                MainApp(
+                    externalVideoUrl = pendingExternalUrl,
+                    onExternalVideoConsumed = { pendingExternalUrl = null }
+                )
             }
             SideEffect { isInitialThemeReady = true }
         }
@@ -265,7 +312,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: String? = null) {
+fun MainApp(
+    audioViewModel: AudioViewModel = viewModel(),
+    externalVideoUrl: String? = null,
+    onExternalVideoConsumed: () -> Unit = {}
+) {
     // ONE shared, activity-scoped SettingsViewModel for every settings screen.
     // Previously each screen created its own VM, so on open the toggles/capsules
     // briefly showed default values before DataStore emitted the saved ones,
@@ -317,6 +368,7 @@ fun MainApp(audioViewModel: AudioViewModel = viewModel(), externalVideoUrl: Stri
             navController.navigate("player/$encodedUrl") {
                 popUpTo("home")
             }
+            onExternalVideoConsumed()
         }
     }
 

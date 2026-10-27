@@ -38,6 +38,10 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
@@ -105,10 +109,13 @@ fun HomeScreen(
     onSwipeNext: () -> Unit = {},
     onSwipePrevious: () -> Unit = {}
 ) {
-    var url by remember { mutableStateOf("") }
-    var showUrlInput by remember { mutableStateOf(false) }
-    var showSearch by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
+    // rememberSaveable: switching tabs (or rotating) used to wipe the search box,
+    // the URL field and the open panels because plain remember is not preserved
+    // when the destination leaves composition.
+    var url by rememberSaveable { mutableStateOf("") }
+    var showUrlInput by rememberSaveable { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current
@@ -138,6 +145,21 @@ fun HomeScreen(
         arrayOf(Manifest.permission.READ_MEDIA_VIDEO)
     } else {
         arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
+    // Permission can also be granted from the system Settings app; the old code
+    // only re-read it when the composable was first created, so the screen stayed
+    // on "Storage permission required" until the app was killed and reopened.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = checkVideoPermission(context)
+                if (granted != hasPermission) hasPermission = granted
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(hasPermission, refreshKey) {
@@ -1196,7 +1218,10 @@ suspend fun loadLocalVideos(context: Context): List<LocalVideo> = withContext(Di
             val size = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
             val width = if (widthColumn >= 0) cursor.getInt(widthColumn) else 0
             val height = if (heightColumn >= 0) cursor.getInt(heightColumn) else 0
-            val contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+            // Use the collection that was actually queried: on Android 10+ that is
+            // MediaStore.VOLUME_EXTERNAL, and building the URI from
+            // EXTERNAL_CONTENT_URI produced wrong URIs for non-primary volumes.
+            val contentUri = ContentUris.withAppendedId(collection, id)
             videos.add(LocalVideo(id, name, contentUri.toString(), isAudio = false, duration = duration, size = size, width = width, height = height))
         }
     }

@@ -476,7 +476,14 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun resetAllSettings() {
-        context.dataStore.edit { it.clear() }
+        context.dataStore.edit { preferences ->
+            // Keep the "already seen this release" marker: resetting preferences
+            // should not make the update notification fire again for a version the
+            // user has already been told about.
+            val lastSeen = preferences[LAST_SEEN_RELEASE_KEY]
+            preferences.clear()
+            if (lastSeen != null) preferences[LAST_SEEN_RELEASE_KEY] = lastSeen
+        }
     }
 
     /**
@@ -486,10 +493,21 @@ class SettingsRepository(private val context: Context) {
      * as a frozen first frame on cold start. This is idempotent and cheap.
      */
     suspend fun cleanupLegacyPerUrlKeys() {
+        // Keys currently in use. The prefix test below must never match these:
+        // "audio_tracks_map" / "text_tracks_map" start with "audio_"/"text_", so
+        // the old version deleted the new JSON maps on every single launch and
+        // "remember track selection" never survived a restart.
+        val currentKeys = setOf(
+            PLAYBACK_POSITIONS_KEY.name,
+            AUDIO_TRACKS_KEY.name,
+            TEXT_TRACKS_KEY.name,
+        )
         context.dataStore.edit { preferences ->
             val legacy = preferences.asMap().keys.filter { key ->
                 val n = key.name
-                n.startsWith("pos_") || n.startsWith("audio_") || n.startsWith("text_")
+                n !in currentKeys && (
+                    n.startsWith("pos_") || n.startsWith("audio_") || n.startsWith("text_")
+                    )
             }
             if (legacy.isNotEmpty()) {
                 legacy.forEach { preferences.remove(it) }

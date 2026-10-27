@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,7 +101,11 @@ fun PlayerScreen(url: String) {
     val settingsRepository = remember { SettingsRepository(context) }
 
     // Lock state - using rememberSavedInstanceState to survive recomposition
-    var isLocked by remember { mutableStateOf(false) }
+    // Picture-in-Picture: the activity reports it through SharedPlayer, so the
+    // Compose overlays (lock button, gestures, dialogs) can stay out of the PiP window.
+    val inPip by com.ghost.video.SharedPlayer.isInPictureInPicture
+    // Saved so the lock survives a configuration change / process restore.
+    var isLocked by rememberSaveable { mutableStateOf(false) }
     var showUnlockButton by remember { mutableStateOf(false) }
     
     // PlayerView reference for controlling visibility
@@ -121,7 +126,6 @@ fun PlayerScreen(url: String) {
     var currentAspectRatio by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var audioSyncMs by remember { mutableFloatStateOf(0f) }
     var audioPitch by remember { mutableFloatStateOf(1f) }
-    var isMuted by remember { mutableStateOf(false) }
     var lastVolumeBeforeMute by remember { mutableFloatStateOf(1f) }
     
     // Collect settings
@@ -235,29 +239,11 @@ fun PlayerScreen(url: String) {
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     
-    DisposableEffect(Unit) {
-        val focusRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).build()
-        } else {
-            null
-        }
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
-            audioManager.requestAudioFocus(focusRequest)
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
-        }
-        
-        onDispose {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
-                audioManager.abandonAudioFocusRequest(focusRequest)
-            } else {
-                @Suppress("DEPRECATION")
-                audioManager.abandonAudioFocus(null)
-            }
-        }
-    }
+    // Audio focus is handled by ExoPlayer itself (its default audio attributes
+    // request focus and pause/resume on focus loss). The old code grabbed focus
+    // manually with no OnAudioFocusChangeListener, which meant a call or a
+    // navigation prompt never paused playback - and the manual request competed
+    // with the player's own focus request.
     
     // Gesture settings
     val gestureSeekEnabled by settingsRepository.gestureSeekEnabled.collectAsState(initial = true)
@@ -331,10 +317,21 @@ fun PlayerScreen(url: String) {
             .setExtensionRendererMode(extensionMode)
             
         val extractorsFactory = DefaultExtractorsFactory()
-        
+
+        // "Volume Boost 200%" has to be applied in the audio pipeline: ExoPlayer
+        // clamps its own volume to 0..1, so `volume = 2f` used to do nothing.
+        // One processor per player instance; it is not reusable across sinks.
+        val volumeBoostProcessor = com.ghost.video.service.VolumeBoostAudioProcessor()
+        val audioSink = androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+            .setAudioProcessors(
+                arrayOf<androidx.media3.common.audio.AudioProcessor>(volumeBoostProcessor)
+            )
+            .build()
+
         ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
+            .setAudioSink(audioSink)
             .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory))
             .build().apply {
                 setMediaItem(MediaItem.fromUri(url))
@@ -400,7 +397,8 @@ fun PlayerScreen(url: String) {
                     val shouldAutoplay = settingsRepository.autoplay.first()
 
                     playbackParameters = PlaybackParameters(defaultSpeed.coerceIn(0.25f, 3f))
-                    volume = if (boostEnabled) 2.0f else 1.0f
+                    volumeBoostProcessor.gain = if (boostEnabled) 2f else 1f
+                    volume = 1f
 
                     prepare()
                     playWhenReady = shouldAutoplay
@@ -482,7 +480,10 @@ fun PlayerScreen(url: String) {
 
         onDispose {
             exoPlayer.removeListener(bufferingListener)
-            if (!com.ghost.video.SharedPlayer.isFloatingMode) {
+            // The old `if (!SharedPlayer.isFloatingMode)` guard was dead code: the
+            // flag was never set to true, so the player was always released. In PiP
+            // the composition is not disposed, so releasing here is still correct.
+            run {
                 coroutineScope.launch {
                     if (settingsRepository.resumePlayback.first()) {
                         settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
@@ -639,11 +640,12 @@ fun PlayerScreen(url: String) {
                             if (exoPlayer.volume > 0f) {
                                 lastVolumeBeforeMute = exoPlayer.volume
                                 exoPlayer.volume = 0f
-                                isMuted = true
                                 setImageResource(R.drawable.ic_volume_mute)
                             } else {
-                                exoPlayer.volume = lastVolumeBeforeMute.coerceIn(0.1f, 1f)
-                                isMuted = false
+                                // Restore the level that was actually active. The old
+                                // coerceIn(0.1f, 1f) also ate the 200% boost, because
+                                // the boost used to be stored in this same value.
+                                exoPlayer.volume = lastVolumeBeforeMute.coerceIn(0f, 1f)
                                 setImageResource(R.drawable.ic_volume_unmute)
                             }
                         }
@@ -821,12 +823,11 @@ fun PlayerScreen(url: String) {
                 }
             },
             update = { playerView ->
-                isMuted = exoPlayer.volume == 0f
-                if (isLocked) {
-                    playerView.useController = false
-                } else {
-                    playerView.useController = true
-                }
+                // No state writes here: this runs during layout, and the old
+                // `isMuted = exoPlayer.volume == 0f` assignment both fought the
+                // mute button and re-triggered composition. The button owns the
+                // icon; the controller is hidden while locked or in Picture-in-Picture.
+                playerView.useController = !isLocked && !inPip
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -834,7 +835,7 @@ fun PlayerScreen(url: String) {
         // Keep the official Material 3 RoundedPolygon loading indicator centered
         // at the player controls while Media3 is buffering.
         AnimatedVisibility(
-            visible = isBuffering && !isLocked,
+            visible = isBuffering && !isLocked && !inPip,
             enter = fadeIn(animationSpec = tween(160)),
             exit = fadeOut(animationSpec = tween(160)),
             modifier = Modifier.align(Alignment.Center)
@@ -848,7 +849,7 @@ fun PlayerScreen(url: String) {
         }
         
         // Unlock button overlay when locked
-        if (isLocked && showUnlockButton) {
+        if (isLocked && showUnlockButton && !inPip) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -881,7 +882,7 @@ fun PlayerScreen(url: String) {
         }
         
         // Overlay UI
-        if (!isLocked) {
+        if (!isLocked && !inPip) {
             IndicatorOverlay(Icons.Default.ZoomIn, "$zoomPercent%", showZoom)
             IndicatorOverlay(Icons.Default.VolumeUp, "$volumePercent%", showVolume)
             IndicatorOverlay(Icons.Default.BrightnessMedium, "$brightnessPercent%", showBrightness)
@@ -889,7 +890,7 @@ fun PlayerScreen(url: String) {
         
         // Seek Overlay
         AnimatedVisibility(
-            visible = showSeek && !isLocked,
+            visible = showSeek && !isLocked && !inPip,
             enter = fadeIn(animationSpec = tween(200)),
             exit = fadeOut(animationSpec = tween(300)),
             modifier = Modifier.align(if (isForwardSeek) Alignment.CenterEnd else Alignment.CenterStart)
@@ -921,7 +922,7 @@ fun PlayerScreen(url: String) {
     }
     
     // Quality Dialog
-    if (showQualityDialog) {
+    if (showQualityDialog && !inPip) {
         TrackSelectionDialog(
             title = "Video Quality",
             exoPlayer = exoPlayer,
@@ -932,7 +933,7 @@ fun PlayerScreen(url: String) {
     }
     
     // Audio Dialog
-    if (showAudioDialog) {
+    if (showAudioDialog && !inPip) {
         TrackSelectionDialog(
             title = "Audio Track",
             exoPlayer = exoPlayer,
@@ -944,7 +945,7 @@ fun PlayerScreen(url: String) {
     
     
     // Subtitle Dialog
-    if (showSubtitleDialog) {
+    if (showSubtitleDialog && !inPip) {
         TrackSelectionDialog(
             title = "Subtitles",
             exoPlayer = exoPlayer,
@@ -955,7 +956,7 @@ fun PlayerScreen(url: String) {
     }
     
     // Audio Sync / Pitch Dialog
-    if (showAudioAdjustDialog) {
+    if (showAudioAdjustDialog && !inPip) {
         AudioAdjustDialog(
             audioSyncMs = audioSyncMs,
             audioPitch = audioPitch,
@@ -979,7 +980,7 @@ fun PlayerScreen(url: String) {
     }
     
     // Aspect Ratio Dialog
-    if (showAspectRatioDialog) {
+    if (showAspectRatioDialog && !inPip) {
         AspectRatioDialog(
             currentAspectRatio = currentAspectRatio,
             onAspectRatioSelected = { ratio ->
@@ -1022,6 +1023,20 @@ fun PlayerScreen(url: String) {
             dialogColors = dialogColors
         )
     }
+}
+
+/**
+ * Current system screen brightness as 0..1, used as the starting point for the
+ * first brightness gesture (the window override is -1 until we set one).
+ */
+private fun systemBrightness(): Float = try {
+    val raw = android.provider.Settings.System.getInt(
+        com.ghost.video.SharedPlayer.appContext?.contentResolver,
+        android.provider.Settings.System.SCREEN_BRIGHTNESS
+    )
+    (raw / 255f).coerceIn(0f, 1f)
+} catch (_: Exception) {
+    0.5f
 }
 
 // Separate class to handle gestures - this ensures lock state is properly checked
@@ -1106,7 +1121,7 @@ class PlayerGestureHandler(
                 if (!gestureDoubleTapEnabled) return false
                 val surface = playerView.videoSurfaceView as? View ?: return false
                 
-                if (e.x > surface.width / 2f) {
+                if (e.x > playerView.width / 2f) {
                     exoPlayer.seekTo(exoPlayer.currentPosition + 10000)
                     onSeekChanged("+10s", true, ++seekTriggerCount)
                 } else {
@@ -1178,7 +1193,13 @@ class PlayerGestureHandler(
                         activity?.window?.let { window ->
                             val lp = window.attributes
                             var currentBrightness = lp.screenBrightness
-                            if (currentBrightness < 0f) currentBrightness = 0.5f
+                            if (currentBrightness < 0f) {
+                                // Window brightness is BRIGHTNESS_OVERRIDE_NONE while the
+                                // system controls it, so the first swipe used to snap the
+                                // screen to a hardcoded 50%. Start from the real system
+                                // brightness instead and only take over from there.
+                                currentBrightness = systemBrightness()
+                            }
                             
                             val sensMultiplier = gestureBrightnessSensitivity * 1.5f
                             val newBrightness = (currentBrightness + distanceY / surface.height * sensMultiplier).coerceIn(0f, 1f)
