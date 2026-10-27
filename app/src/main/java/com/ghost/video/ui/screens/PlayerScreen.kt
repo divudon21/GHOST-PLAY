@@ -482,34 +482,26 @@ fun PlayerScreen(url: String) {
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, exoPlayer) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
-                coroutineScope.launch {
+                // Lifecycle events arrive on the main thread, so the player is read
+                // HERE and only the DataStore write is delegated. The old version
+                // read currentPosition/currentTracks inside a coroutine, which
+                // Media3 rejects with IllegalStateException whenever that coroutine
+                // resumes on another thread (caught by PlayerScreenSmokeTest).
+                val position = exoPlayer.currentPosition
+                val tracks = exoPlayer.currentTracks
+                val audioId = selectedTrackId(tracks, C.TRACK_TYPE_AUDIO)
+                val textId = selectedTrackId(tracks, C.TRACK_TYPE_TEXT)
+
+                CoroutineScope(Dispatchers.IO).launch {
                     if (settingsRepository.resumePlayback.first()) {
-                        settingsRepository.savePlaybackPosition(url, exoPlayer.currentPosition)
+                        settingsRepository.savePlaybackPosition(url, position)
                     }
-                    
-                    val tracks = exoPlayer.currentTracks
-                    val rememberSelections = settingsRepository.rememberSelections.first()
-                    for (group in tracks.groups) {
-                        if (group.isSelected) {
-                            for (i in 0 until group.length) {
-                                if (group.isTrackSelected(i)) {
-                                    val format = group.getTrackFormat(i)
-                                    val idToSave = format.id ?: format.language ?: ""
-                                    if (idToSave.isNotEmpty() && rememberSelections) {
-                                        if (group.type == C.TRACK_TYPE_AUDIO) {
-                                            settingsRepository.saveAudioTrack(url, idToSave)
-                                        } else if (group.type == C.TRACK_TYPE_TEXT) {
-                                            settingsRepository.saveTextTrack(url, idToSave)
-                                        }
-                                    }
-                                    break
-                                }
-                            }
-                        }
-                    }
+                    if (!settingsRepository.rememberSelections.first()) return@launch
+                    if (audioId.isNotEmpty()) settingsRepository.saveAudioTrack(url, audioId)
+                    if (textId.isNotEmpty()) settingsRepository.saveTextTrack(url, textId)
                 }
             }
         }
@@ -1131,6 +1123,23 @@ fun PlayerScreen(url: String) {
             dialogColors = dialogColors
         )
     }
+}
+
+/**
+ * Id (or language) of the currently selected track of [trackType], or "" when the
+ * player has no selected track of that type. Pure function of the track list so it
+ * can be called from the main thread without touching the player twice.
+ */
+internal fun selectedTrackId(tracks: Tracks, trackType: Int): String {
+    for (group in tracks.groups) {
+        if (group.type != trackType || !group.isSelected) continue
+        for (i in 0 until group.length) {
+            if (!group.isTrackSelected(i)) continue
+            val format = group.getTrackFormat(i)
+            return format.id ?: format.language ?: ""
+        }
+    }
+    return ""
 }
 
 /** Human readable name for a Media3 playback state, used in the error panel. */
