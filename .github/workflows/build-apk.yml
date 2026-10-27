@@ -42,9 +42,12 @@ jobs:
       - name: Collect APKs
         if: steps.build.outcome == 'success'
         run: |
+          set -x
+          find app/build -name '*.apk' -print
           mkdir -p output
-          find app/build/outputs/apk/release -name "*.apk" -exec cp {} output/ \;
+          find app/build -name '*.apk' -exec cp -v {} output/ \;
           ls -lh output
+          test -n "$(ls -A output)" || { echo 'No APK was produced'; exit 1; }
 
       - name: Upload APKs
         if: steps.build.outcome == 'success'
@@ -65,10 +68,10 @@ jobs:
       # The integration that reads this repository cannot download Actions logs,
       # so a failed build publishes its tail to the `ci-log` branch instead.
       - name: Publish build log (on failure)
-        if: steps.build.outcome != 'success'
+        if: failure()
         run: |
           mkdir -p ci
-          tail -n 600 build.log > ci/last-build.log || true
+          { echo '### gradle output (tail)'; tail -n 600 build.log 2>/dev/null || true; } > ci/last-build.log
           git config user.name "ghost-ci"
           git config user.email "ci@ghost.local"
           git add -f ci/last-build.log
