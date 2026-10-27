@@ -97,7 +97,13 @@ jobs:
         if: failure()
         run: |
           mkdir -p ci
-          { echo '### inspect'; (ls -R output 2>/dev/null || true); echo; echo '### unit tests (tail)'; tail -n 200 unit.log 2>/dev/null || true; echo; echo '### gradle output (tail)'; tail -n 600 build.log 2>/dev/null || true; } > ci/last-build.log
+          { echo '### inspect'; (ls -R output 2>/dev/null || true); echo;
+            echo '### failing test details';
+            for f in app/build/test-results/testDebugUnitTest/*.xml; do
+              [ -e "$f" ] || continue
+              grep -q '<failure' "$f" && sed -n '1,120p' "$f"
+            done;
+            echo; echo '### unit tests (tail)'; grep -v "^\s*at org.gradle" unit.log 2>/dev/null | tail -n 200 || true; echo; echo '### gradle output (tail)'; tail -n 600 build.log 2>/dev/null || true; } > ci/last-build.log
           git config user.name "ghost-ci"
           git config user.email "ci@ghost.local"
           git add -f ci/last-build.log
