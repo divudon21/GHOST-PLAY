@@ -3,6 +3,9 @@ name: Build APKs
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - 'arena/**'
     tags:
       - 'v*'
 
