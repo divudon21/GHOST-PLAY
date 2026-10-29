@@ -1,0 +1,24 @@
+===== output/app-arm64-v8a-release.apk
+lib/arm64-v8a
+dex files: 4
+===== output/app-armeabi-v7a-release.apk
+lib/armeabi-v7a
+dex files: 4
+===== output/app-universal-release.apk
+lib/arm64-v8a
+lib/armeabi-v7a
+lib/x86
+lib/x86_64
+dex files: 4
+===== badging output/app-arm64-v8a-release.apk
+package: name='com.ghost.video' versionCode='10' versionName='2.8' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+targetSdkVersion:'36'
+native-code: 'arm64-v8a'
+===== badging output/app-armeabi-v7a-release.apk
+package: name='com.ghost.video' versionCode='10' versionName='2.8' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+targetSdkVersion:'36'
+native-code: 'armeabi-v7a'
+===== badging output/app-universal-release.apk
+package: name='com.ghost.video' versionCode='10' versionName='2.8' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+targetSdkVersion:'36'
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
