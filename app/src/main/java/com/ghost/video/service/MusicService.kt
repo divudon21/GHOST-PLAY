@@ -94,7 +94,15 @@ class MusicService : MediaSessionService() {
 
         fun togglePlayPause() {
             instance?.player?.let { player ->
-                player.playWhenReady = !player.isPlaying
+                // `!player.isPlaying` reads false while buffering, so tapping pause
+                // during a buffer stall used to just re-arm playback. playWhenReady
+                // is the intent flag and stays correct through buffering.
+                if (player.playbackState == Player.STATE_ENDED) {
+                    player.seekToDefaultPosition()
+                    player.playWhenReady = true
+                } else {
+                    player.playWhenReady = !player.playWhenReady
+                }
             }
         }
 
@@ -129,6 +137,7 @@ class MusicService : MediaSessionService() {
                 _relayIsPlaying.value = false
                 service.playlist = emptyList()
                 service.stopForeground(STOP_FOREGROUND_REMOVE)
+                if (instance === service) instance = null
                 service.stopSelf()
             }
         }
@@ -148,17 +157,37 @@ class MusicService : MediaSessionService() {
         _currentAudio.value = audio
         _relayCurrentAudio.value = audio
 
-        // Respect the "Volume Boost 200%" setting for the audio player.
-        serviceScope.launch {
-            player?.volume = if (SettingsRepository(this@MusicService).volumeBoostEnabled.first()) 2f else 1f
-        }
+        // Volume stays at the player's own 0..1 range (ExoPlayer clamps anything
+        // above 1f anyway). No custom DSP sits in the audio pipeline: a fault in
+        // one there would abort music AND video playback.
+        player?.volume = 1f
     }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
 
-        player = ExoPlayer.Builder(this).build().apply {
+        player = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build().apply {
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        // Surface the failure and clear the mini player instead of
+                        // leaving it stuck on a track that cannot be decoded.
+                        _isPlaying.value = false
+                        _relayIsPlaying.value = false
+                        _currentAudio.value = null
+                        _relayCurrentAudio.value = null
+                    }
+                })
+
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _isPlaying.value = isPlaying
@@ -339,12 +368,12 @@ class MusicService : MediaSessionService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Show actions in compact view: prev, play/pause, next
-        val compactActions = if (hasNext) {
-            intArrayOf(0, 1, 2)
-        } else {
-            intArrayOf(1)
-        }
+        // Show actions in compact view. The indices refer to the actions added
+        // BELOW, so they must match that layout: with a single-item playlist only
+        // play/pause exists and it is action 0. Requesting index 1 there was an
+        // out-of-bounds crash (IllegalArgumentException while building the
+        // notification) whenever a playlist had just one track.
+        val compactActions = compactActionIndices(hasSiblings = hasNext)
 
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
             .setMediaSession(mediaSession?.sessionCompatToken)
@@ -403,3 +432,16 @@ class MusicService : MediaSessionService() {
         serviceScope.cancel()
     }
 }
+
+/**
+ * Number of actions [MusicService] adds to its media notification.
+ * Previous and next are only added when the queue has more than one item.
+ */
+internal fun notificationActionCount(hasSiblings: Boolean): Int = if (hasSiblings) 3 else 1
+
+/**
+ * Indices passed to `setShowActionsInCompactView`, must stay below
+ * [notificationActionCount] or the notification builder throws.
+ */
+internal fun compactActionIndices(hasSiblings: Boolean): IntArray =
+    if (hasSiblings) intArrayOf(0, 1, 2) else intArrayOf(0)

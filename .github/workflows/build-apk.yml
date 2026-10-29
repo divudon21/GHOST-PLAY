@@ -1,0 +1,125 @@
+name: Build APKs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'arena/**'
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Assemble split + universal APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace 2>&1 | tee unit.log
+
+      - name: Assemble release (split ABI + universal)
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Collect APKs
+        if: steps.build.outcome == 'success'
+        run: |
+          set -x
+          find app/build -name '*.apk' -print
+          mkdir -p output
+          find app/build -name '*.apk' -exec cp -v {} output/ \;
+          ls -lh output
+          test -n "$(ls -A output)" || { echo 'No APK was produced'; exit 1; }
+
+      - name: Inspect APKs
+        if: steps.build.outcome == 'success'
+        run: |
+          mkdir -p ci
+          {
+            for apk in output/*.apk; do
+              echo "===== $apk"
+              unzip -l "$apk" | grep -E "lib/" | awk '{print $4}' | sed 's|/[^/]*$||' | sort -u
+              echo "dex files: $(unzip -l "$apk" | grep -c 'classes.*dex')"
+            done
+            BADGING=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+            for apk in output/*.apk; do
+              echo "===== badging $apk"
+              "$BADGING" dump badging "$apk" 2>/dev/null | grep -E "^package|sdkVersion|targetSdkVersion|native-code" || true
+            done
+          } | tee ci/inspect.txt
+
+      - name: Upload APKs
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-play-apks
+          path: output/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach APKs to release (tag builds)
+        if: steps.build.outcome == 'success' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: output/*.apk
+          generate_release_notes: true
+
+      # The integration that reads this repository cannot download Actions logs,
+      # so a failed build publishes its tail to the `ci-log` branch instead.
+      - name: Publish build log (on failure)
+        if: failure()
+        run: |
+          mkdir -p ci
+          { echo '### inspect'; (ls -R output 2>/dev/null || true); echo;
+            echo '### failing test details';
+            for f in app/build/test-results/testDebugUnitTest/*.xml; do
+              [ -e "$f" ] || continue
+              grep -q '<failure' "$f" && sed -n '1,120p' "$f"
+            done;
+            echo; echo '### unit tests (tail)'; grep -v "^\s*at org.gradle" unit.log 2>/dev/null | tail -n 200 || true; echo; echo '### gradle output (tail)'; tail -n 600 build.log 2>/dev/null || true; } > ci/last-build.log
+          git config user.name "ghost-ci"
+          git config user.email "ci@ghost.local"
+          git add -f ci/last-build.log
+          git commit -m "ci: failed build log" || true
+          git push origin HEAD:refs/heads/ci-log --force
+
+      - name: Publish APK inspection (success)
+        if: steps.build.outcome == 'success'
+        run: |
+          git config user.name "ghost-ci"
+          git config user.email "ci@ghost.local"
+          git checkout -b ci-log-out
+          git add -f ci/inspect.txt
+          git commit -m "ci: apk inspection" || true
+          git push origin HEAD:refs/heads/ci-log --force
+
+      - name: Fail the run when the build failed
+        if: steps.build.outcome != 'success'
+        run: exit 1

@@ -476,7 +476,14 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun resetAllSettings() {
-        context.dataStore.edit { it.clear() }
+        context.dataStore.edit { preferences ->
+            // Keep the "already seen this release" marker: resetting preferences
+            // should not make the update notification fire again for a version the
+            // user has already been told about.
+            val lastSeen = preferences[LAST_SEEN_RELEASE_KEY]
+            preferences.clear()
+            if (lastSeen != null) preferences[LAST_SEEN_RELEASE_KEY] = lastSeen
+        }
     }
 
     /**
@@ -486,13 +493,17 @@ class SettingsRepository(private val context: Context) {
      * as a frozen first frame on cold start. This is idempotent and cheap.
      */
     suspend fun cleanupLegacyPerUrlKeys() {
+        val currentKeys = setOf(
+            PLAYBACK_POSITIONS_KEY.name,
+            AUDIO_TRACKS_KEY.name,
+            TEXT_TRACKS_KEY.name,
+        )
         context.dataStore.edit { preferences ->
-            val legacy = preferences.asMap().keys.filter { key ->
-                val n = key.name
-                n.startsWith("pos_") || n.startsWith("audio_") || n.startsWith("text_")
-            }
+            val legacy = legacyKeysToRemove(preferences.asMap().keys.map { it.name }, currentKeys)
             if (legacy.isNotEmpty()) {
-                legacy.forEach { preferences.remove(it) }
+                legacy.forEach { name ->
+                    preferences.asMap().keys.firstOrNull { it.name == name }?.let { preferences.remove(it) }
+                }
             }
         }
     }
@@ -584,4 +595,24 @@ private fun trimMap(map: LinkedHashMap<String, String>): LinkedHashMap<String, S
         map.remove(oldest)
     }
     return map
+}
+
+/**
+ * Names of the LEGACY per-URL preference keys (`pos_<url>`, `audio_<url>`,
+ * `text_<url>`) that should be deleted.
+ *
+ * [currentKeys] are the keys the app uses today and must never be returned:
+ * `audio_tracks_map` and `text_tracks_map` also start with `audio_` / `text_`,
+ * so the earlier prefix-only test deleted the live JSON maps on every launch and
+ * "remember track selection" never survived a restart.
+ */
+internal fun legacyKeysToRemove(
+    allKeys: Collection<String>,
+    currentKeys: Set<String>,
+): List<String> = allKeys.filter { name ->
+    name !in currentKeys && (
+        name.startsWith("pos_") ||
+            name.startsWith("audio_") ||
+            name.startsWith("text_")
+        )
 }
