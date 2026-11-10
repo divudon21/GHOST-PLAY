@@ -509,10 +509,11 @@ fun MainApp(
         // The bottom bar already slides via AnimatedVisibility and the content
         // cross-fades, so the bar appear/disappear is still smooth.
         val isTabRoute = currentRoute in showBottomNavRoutes
-        // The Settings tab draws edge-to-edge: its own Scaffold fills the status
-        // bar / notch area with the settings background and the top app bar applies
-        // the status bar inset itself. Without this the notch strip stayed bare.
-        val edgeToEdgeTop = currentRoute == "settings"
+        // Home and Settings draw edge-to-edge: their own Scaffolds fill the status
+        // bar / notch area with the screen background and the shared top app bar
+        // applies the status bar inset itself. Without this the notch strip stayed
+        // bare above those screens.
+        val edgeToEdgeTop = currentRoute == "settings" || currentRoute == "home"
         val layoutDirection = LocalLayoutDirection.current
         NavHost(
             navController = navController,
