@@ -23,6 +23,18 @@ implementation instead of a re-drawn approximation.
     extracted verbatim into `FloatingTabBarScroll.kt`; the rest of that file (the
     older, non-folding bar) is not used by Ghost.
 
+## NextPlayer (settings list UI design)
+
+- Source: https://github.com/anilbeesetti/nextplayer
+- Copyright (C) Anil Beesetti
+- License: GPL-3.0
+- The Settings list UI — top app bar with a tonal back button and title,
+  followed by segmented card rows (leading icon, bold title, smaller
+  description, no trailing chevron) — is adapted from NextPlayer's
+  `SettingsScreen` / `PreferenceItem` design. Ghost Play's implementation
+  (`ui/screens/SettingsScreen.kt`) is written against Ghost's own theme and
+  navigation; no NextPlayer source files are vendored verbatim.
+
 ## FloatingTabBar v1.0.1 (compose-floating-tab-bar)
 
 - Source: https://github.com/elyesmansour/compose-floating-tab-bar (as vendored by Convx)
