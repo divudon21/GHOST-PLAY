@@ -118,7 +118,6 @@ import com.ghost.video.ui.theme.AgonAppTheme
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.data.AppPalette
 import com.ghost.video.data.AppTextStyle
-import com.ghost.video.ui.components.LocalGlowEffect
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
 import com.ghost.video.navigation.convx.GhostConvxNavigationBar
@@ -298,7 +297,8 @@ class MainActivity : ComponentActivity() {
                 palette = startupTheme?.palette ?: AppPalette.MONOCHROME,
                 textStyle = startupTheme?.textStyle ?: AppTextStyle.DEFAULT,
                 boldText = startupTheme?.boldText ?: false,
-                highContrastDark = startupTheme?.highContrastDark ?: false
+                highContrastDark = startupTheme?.highContrastDark ?: false,
+                useDynamicColors = startupTheme?.useDynamicColors ?: false
             ) {
                 MainApp(
                     externalVideoUrl = pendingExternalUrl,
@@ -322,7 +322,6 @@ fun MainApp(
     // causing a visible "reset/refresh" flash. Sharing a single warmed-up VM
     // (its flows are collected Eagerly) means saved values are ready instantly.
     val sharedSettingsViewModel: SettingsViewModel = viewModel()
-    val glowEffect by sharedSettingsViewModel.glowEffect.collectAsState()
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -371,7 +370,6 @@ fun MainApp(
         }
     }
 
-    CompositionLocalProvider(LocalGlowEffect provides glowEffect) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = { 
@@ -513,7 +511,7 @@ fun MainApp(
         // bar / notch area with the screen background and the shared top app bar
         // applies the status bar inset itself. Without this the notch strip stayed
         // bare above those screens.
-        val edgeToEdgeTop = currentRoute == "settings" || currentRoute == "home"
+        val edgeToEdgeTop = currentRoute == "settings" || currentRoute == "home" || currentRoute == "audio"
         val layoutDirection = LocalLayoutDirection.current
         NavHost(
             navController = navController,
@@ -723,7 +721,6 @@ fun MainApp(
                 PlayerScreen(url = normalizeRouteUrl(url))
             }
         }
-    }
     }
 }
 

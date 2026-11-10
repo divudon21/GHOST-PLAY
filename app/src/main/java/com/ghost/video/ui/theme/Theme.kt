@@ -795,12 +795,27 @@ fun AgonAppTheme(
     textStyle: AppTextStyle = AppTextStyle.DEFAULT,
     boldText: Boolean = false,
     highContrastDark: Boolean = false,
+    useDynamicColors: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val isSystemDark = isSystemInDarkTheme()
 
-    val darkScheme = paletteScheme(palette, isDark = true)
-    val lightScheme = paletteScheme(palette, isDark = false)
+    // Dynamic color (NextPlayer's "Dynamic color theme"): the wallpaper-derived
+    // Material You scheme replaces the curated palettes on Android 12+.
+    val context = LocalContext.current
+    val dynamicColorsSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val useDynamic = useDynamicColors && dynamicColorsSupported
+
+    val darkScheme = if (useDynamic) {
+        dynamicDarkColorScheme(context)
+    } else {
+        paletteScheme(palette, isDark = true)
+    }
+    val lightScheme = if (useDynamic) {
+        dynamicLightColorScheme(context)
+    } else {
+        paletteScheme(palette, isDark = false)
+    }
 
     // High contrast variant for DARK theme
     val highContrastDarkScheme = darkScheme.copy(

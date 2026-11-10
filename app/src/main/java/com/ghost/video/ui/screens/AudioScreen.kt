@@ -26,6 +26,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
@@ -46,10 +47,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.ui.components.EmptyState
+import com.ghost.video.ui.components.ListSectionTitle
+import com.ghost.video.ui.components.NextIcons
+import com.ghost.video.ui.components.NextSegmentedListItem
+import com.ghost.video.ui.components.NextTopAppBar
 import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.AudioViewModel
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +71,7 @@ private var cachedAudios: List<LocalAudio>? = null
 
 private const val AUDIO_PAGE_SIZE = 60
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AudioScreen(
     viewModel: AudioViewModel = viewModel(),
@@ -191,16 +198,40 @@ fun AudioScreen(
         refreshKey++
     }
 
-    Column(
+    // Same chrome as the Settings and Home tabs: surfaceContainer painting the
+    // notch area, shared NextTopAppBar, then a sectioned music list.
+    Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .tabSwipe(onSwipeNext, onSwipePrevious)
-    ) {
-        Text("Local Audio Files", style = MaterialTheme.typography.titleLarge)
-        Spacer(modifier = Modifier.height(16.dp))
+            .tabSwipe(onSwipeNext, onSwipePrevious),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentWindowInsets = WindowInsets(0.dp),
+        topBar = {
+            NextTopAppBar(
+                title = {
+                    Text(
+                        text = "Audio",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
+            ListSectionTitle(
+                text = if (localAudios.isEmpty()) "Local audio"
+                else "Local audio · ${localAudios.size}"
+            )
 
-        when {
+            when {
             !hasPermission -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -270,13 +301,15 @@ fun AudioScreen(
 
             else -> {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
                     modifier = Modifier.weight(1f)
                 ) {
-                    items(localAudios, key = { it.uri }) { audio ->
+                    itemsIndexed(localAudios, key = { _, audio -> audio.uri }) { index, audio ->
                         AudioListItem(
                             audio = audio,
                             isPlaying = currentAudio?.uri == audio.uri,
+                            isFirstItem = index == 0,
+                            isLastItem = index == localAudios.lastIndex,
                             onClick = { viewModel.playAudio(context, audio) },
                             onChanged = { refreshKey++ },
                             onDeleted = onAudioDeleted
@@ -298,6 +331,7 @@ fun AudioScreen(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -370,21 +404,46 @@ suspend fun loadLocalAudiosPage(
     audios
 }
 
+/** Rounded album art used as the leading content of a music list item. */
+@Composable
+private fun AlbumArt(bitmap: Bitmap?) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Audiotrack,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AudioListItem(
     audio: LocalAudio,
     isPlaying: Boolean = false,
+    isFirstItem: Boolean = false,
+    isLastItem: Boolean = false,
     onClick: () -> Unit,
     onChanged: () -> Unit = {},
     onDeleted: (LocalAudio) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val containerColor by animateColorAsState(
-        targetValue = if (isPlaying) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant,
-        label = "audioItemContainer"
-    )
     var menuExpanded by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
@@ -423,67 +482,26 @@ fun AudioListItem(
         }
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = { menuExpanded = true }
-            ),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Box {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                ) {
-                    if (thumbnailBitmap != null) {
-                        Image(
-                            bitmap = thumbnailBitmap!!.asImageBitmap(),
-                            contentDescription = "Album Art",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Audiotrack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
+    Box {
+        NextSegmentedListItem(
+            selected = isPlaying,
+            isFirstItem = isFirstItem,
+            isLastItem = isLastItem,
+            onClick = onClick,
+            onLongClick = { menuExpanded = true },
+            leadingContent = {
+                AlbumArt(bitmap = thumbnailBitmap)
+            },
+            supportingContent = {
+                if (!audio.artist.isNullOrEmpty() && audio.artist != "<unknown>") {
                     Text(
-                        text = audio.name,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = audio.artist,
                         maxLines = 1,
-                        color = if (isPlaying) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurface
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (!audio.artist.isNullOrEmpty() && audio.artist != "<unknown>") {
-                        Text(
-                            text = audio.artist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isPlaying) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
+            },
+            trailingContent = {
                 if (isPlaying) {
                     Icon(
                         imageVector = Icons.Rounded.GraphicEq,
@@ -491,56 +509,18 @@ fun AudioListItem(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Playing",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                 }
-            }
-
-            // Long-press context menu: same options as the video 3-dot menu.
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                DropdownMenuItem(
-                    text = { Text("Play") },
-                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
-                    onClick = { menuExpanded = false; onClick() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Share") },
-                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "audio/*"
-                            putExtra(Intent.EXTRA_STREAM, Uri.parse(audio.uri))
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Share audio"))
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Rename") },
-                    leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
-                    onClick = { menuExpanded = false; showRename = true }
-                )
-                DropdownMenuItem(
-                    text = { Text("Details") },
-                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-                    onClick = { menuExpanded = false; showDetails = true }
-                )
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                    onClick = {
-                        menuExpanded = false
-                        deleteAudio(context, audio, deleteLauncher::launch, onChanged)
-                    }
-                )
-            }
+            },
+        ) {
+            Text(
+                text = audio.name,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
+
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }
+
     }
 
     if (showDetails) {
