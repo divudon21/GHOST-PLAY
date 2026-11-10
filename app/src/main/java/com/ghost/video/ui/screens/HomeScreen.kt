@@ -77,6 +77,7 @@ import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ViewLayout
 import com.ghost.video.data.VideoThumbnailPipeline
 import com.ghost.video.ui.components.AppLoadingIndicator
+import com.ghost.video.ui.components.NextTopAppBar
 import com.ghost.video.ui.components.EmptyState
 import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
@@ -191,58 +192,83 @@ fun HomeScreen(
         context.startActivity(intent)
     }
 
-    Column(
+    // Same chrome as the Settings tab: a Scaffold painting surfaceContainer
+    // edge-to-edge (behind the status bar / notch) with the shared NextTopAppBar
+    // component and FilledTonalIconButton actions.
+    Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .tabSwipe(onSwipeNext, onSwipePrevious)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_fireplay),
-                    contentDescription = "Ghost Play",
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {
-                    if (showSearch) {
-                        showSearch = false
-                        focusManager.clearFocus()
-                    } else {
-                        showSearch = true
-                        showUrlInput = false
+            .tabSwipe(onSwipeNext, onSwipePrevious),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentWindowInsets = WindowInsets(0.dp),
+        topBar = {
+            NextTopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_fireplay),
+                            contentDescription = null,
+                            modifier = Modifier.size(30.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Ghost Play",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                }) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_search),
-                        contentDescription = "Search videos",
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-                IconButton(onClick = {
-                    if (showUrlInput) {
-                        showUrlInput = false
-                        focusManager.clearFocus()
-                    } else {
-                        showUrlInput = true
-                        showSearch = false
+                },
+                actions = {
+                    FilledTonalIconButton(
+                        onClick = {
+                            if (showSearch) {
+                                showSearch = false
+                                focusManager.clearFocus()
+                            } else {
+                                showSearch = true
+                                showUrlInput = false
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_search),
+                            contentDescription = "Search videos",
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
-                }) {
-                    Icon(painterResource(id = R.drawable.ic_url), contentDescription = "Add URL", modifier = Modifier.size(28.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = {
+                            if (showUrlInput) {
+                                showUrlInput = false
+                                focusManager.clearFocus()
+                            } else {
+                                showUrlInput = true
+                                showSearch = false
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_url),
+                            contentDescription = "Add URL",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
-            }
+            )
         }
-
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
         AnimatedVisibility(
             visible = showSearch,
             enter = fadeIn(animationSpec = tween(260)) + expandVertically(animationSpec = tween(260)),
@@ -473,6 +499,7 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
             }
         }
     }
