@@ -1,100 +1,86 @@
 package com.ghost.video.ui.screens
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.R
+import com.ghost.video.ui.components.ListSectionTitle
+import com.ghost.video.ui.components.NextIcons
+import com.ghost.video.ui.components.NextTopAppBar
+import com.ghost.video.ui.components.PreferenceSwitch
 import com.ghost.video.viewmodel.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Audio preferences.
+ *
+ * Ported from NextPlayer (GPL-3.0):
+ * https://github.com/anilbeesetti/nextplayer/blob/main/feature/settings/src/main/java/dev/anilbeesetti/nextplayer/settings/screens/audio/AudioPreferencesScreen.kt
+ */
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+)
 @Composable
 fun AudioSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel()
 ) {
-    val volumeBoostEnabled by viewModel.volumeBoostEnabled.collectAsState()
+    val volumeBoost by viewModel.volumeBoostEnabled.collectAsState()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Audio") },
+            NextTopAppBar(
+                title = stringResource(id = R.string.audio),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    FilledTonalIconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = NextIcons.ArrowBack,
+                            contentDescription = stringResource(id = R.string.navigate_up),
                         )
                     }
-                }
+                },
             )
-        }
-    ) { padding ->
-        LazyColumn(
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
+                .verticalScroll(state = rememberScrollState())
+                .padding(paddingValues = innerPadding)
+                .padding(horizontal = 16.dp),
         ) {
-            item {
-                VolumeBoostCard(
-                    checked = volumeBoostEnabled,
-                    onCheckedChange = { viewModel.setVolumeBoostEnabled(it) }
+            ListSectionTitle(text = stringResource(id = R.string.playback))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.volume_boost),
+                    description = stringResource(id = R.string.volume_boost_desc),
+                    icon = NextIcons.VolumeUp,
+                    isChecked = volumeBoost,
+                    onClick = { viewModel.setVolumeBoostEnabled(!volumeBoost) },
+                    isFirstItem = true,
+                    isLastItem = true,
                 )
             }
         }
-    }
-
-}
-
-@Composable
-fun VolumeBoostCard(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.VolumeUp,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Volume Boost 200%",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Increase maximum volume up to 200%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                )
-            }
-            com.ghost.video.ui.components.SmoothSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
     }
 }

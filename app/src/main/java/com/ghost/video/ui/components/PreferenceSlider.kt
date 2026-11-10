@@ -1,0 +1,70 @@
+package com.ghost.video.ui.components
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+
+/**
+ * Ported from NextPlayer (GPL-3.0):
+ * https://github.com/anilbeesetti/nextplayer/blob/main/core/ui/src/main/java/dev/anilbeesetti/nextplayer/core/ui/components/PreferenceSlider.kt
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PreferenceSlider(
+    modifier: Modifier = Modifier,
+    title: String,
+    description: String? = null,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    isFirstItem: Boolean = false,
+    isLastItem: Boolean = false,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit = {},
+    onReset: (() -> Unit)? = null,
+    trailingContent: @Composable () -> Unit = {},
+) {
+    NextSegmentedListItem(
+        modifier = modifier,
+        onClick = {},
+        onLongClick = null,
+        enabled = enabled,
+        isFirstItem = isFirstItem,
+        isLastItem = isLastItem,
+        leadingContent = icon?.let {
+            {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        },
+        supportingContent = {
+            Column {
+                description?.let { Text(text = description) }
+                Slider(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    value = value,
+                    valueRange = valueRange,
+                    steps = steps,
+                    onValueChange = onValueChange,
+                    onValueChangeFinished = onValueChangeFinished,
+                )
+            }
+        },
+        content = { Text(text = title) },
+        trailingContent = trailingContent,
+    )
+}

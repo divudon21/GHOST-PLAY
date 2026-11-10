@@ -1,36 +1,47 @@
 package com.ghost.video.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.SwipeRight
-import androidx.compose.material.icons.rounded.WbSunny
-import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.ZoomOutMap
-import androidx.compose.material.icons.rounded.PanToolAlt
-import androidx.compose.material.icons.rounded.TouchApp
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.R
+import com.ghost.video.ui.components.ListSectionTitle
+import com.ghost.video.ui.components.NextIcons
+import com.ghost.video.ui.components.NextTopAppBar
+import com.ghost.video.ui.components.PreferenceSlider
+import com.ghost.video.ui.components.PreferenceSwitch
 import com.ghost.video.viewmodel.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Gesture preferences.
+ *
+ * Ported from NextPlayer (GPL-3.0):
+ * https://github.com/anilbeesetti/nextplayer/blob/main/feature/settings/src/main/java/dev/anilbeesetti/nextplayer/settings/screens/gesture/GesturePreferencesScreen.kt
+ */
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+)
 @Composable
 fun GesturesSettingsScreen(
-    viewModel: SettingsViewModel = viewModel(),
-    onBack: () -> Unit = {}
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel = viewModel()
 ) {
     val seekEnabled by viewModel.gestureSeekEnabled.collectAsState()
     val seekSensitivity by viewModel.gestureSeekSensitivity.collectAsState()
@@ -44,218 +55,103 @@ fun GesturesSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Gestures") },
+            NextTopAppBar(
+                title = stringResource(id = R.string.gestures),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    FilledTonalIconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = NextIcons.ArrowBack,
+                            contentDescription = stringResource(id = R.string.navigate_up),
+                        )
                     }
-                }
+                },
             )
-        }
-    ) { padding ->
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+                .verticalScroll(state = rememberScrollState())
+                .padding(paddingValues = innerPadding)
+                .padding(horizontal = 16.dp),
         ) {
-            // Seek gesture
-            GestureToggleItem(
-                title = "Seek gesture",
-                subtitle = "Swipe horizontally to seek",
-                icon = Icons.Rounded.SwipeRight,
-                checked = seekEnabled,
-                onCheckedChange = { viewModel.setGestureSeekEnabled(it) },
-                showTopDivider = true
-            )
-
-            // Seek sensitivity — collapses when the gesture is off.
-            AnimatedVisibility(visible = seekEnabled) {
-                GestureSensitivityItem(
-                    title = "Seek gesture sensitivity",
+            ListSectionTitle(text = stringResource(id = R.string.gestures))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.seek_gesture),
+                    description = stringResource(id = R.string.seek_gesture_description),
+                    icon = NextIcons.SwipeHorizontal,
+                    isChecked = seekEnabled,
+                    onClick = { viewModel.setGestureSeekEnabled(!seekEnabled) },
+                    isFirstItem = true,
+                )
+                PreferenceSlider(
+                    title = stringResource(id = R.string.seek_gesture_sensitivity),
+                    description = "%.1f×".format(seekSensitivity),
+                    icon = NextIcons.Sensitivity,
+                    enabled = seekEnabled,
                     value = seekSensitivity,
-                    enabled = true,
-                    onValueChange = { viewModel.setGestureSeekSensitivity(it) }
+                    valueRange = 0.1f..2.0f,
+                    onValueChange = { viewModel.setGestureSeekSensitivity(it) },
                 )
-            }
-
-            // Brightness gesture
-            GestureToggleItem(
-                title = "Brightness gesture",
-                subtitle = "Adjust brightness by swiping vertically",
-                icon = Icons.Rounded.WbSunny,
-                checked = brightnessEnabled,
-                onCheckedChange = { viewModel.setGestureBrightnessEnabled(it) }
-            )
-
-            // Brightness sensitivity — collapses when the gesture is off.
-            AnimatedVisibility(visible = brightnessEnabled) {
-                GestureSensitivityItem(
-                    title = "Brightness gesture sensitivity",
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.brightness_gesture),
+                    description = stringResource(id = R.string.brightness_gesture_description),
+                    icon = NextIcons.SwipeVertical,
+                    isChecked = brightnessEnabled,
+                    onClick = { viewModel.setGestureBrightnessEnabled(!brightnessEnabled) },
+                )
+                PreferenceSlider(
+                    title = stringResource(id = R.string.brightness_gesture_sensitivity),
+                    description = "%.1f×".format(brightnessSensitivity),
+                    icon = NextIcons.Brightness,
+                    enabled = brightnessEnabled,
                     value = brightnessSensitivity,
-                    enabled = true,
-                    onValueChange = { viewModel.setGestureBrightnessSensitivity(it) }
+                    valueRange = 0.1f..2.0f,
+                    onValueChange = { viewModel.setGestureBrightnessSensitivity(it) },
                 )
-            }
-
-            // Volume gesture
-            GestureToggleItem(
-                title = "Volume gesture",
-                subtitle = "Adjust volume by swiping vertically",
-                icon = Icons.Rounded.VolumeUp,
-                checked = volumeEnabled,
-                onCheckedChange = { viewModel.setGestureVolumeEnabled(it) }
-            )
-
-            // Volume sensitivity — collapses when the gesture is off.
-            AnimatedVisibility(visible = volumeEnabled) {
-                GestureSensitivityItem(
-                    title = "Volume gesture sensitivity",
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.volume_gesture),
+                    description = stringResource(id = R.string.volume_gesture_description),
+                    icon = NextIcons.VolumeUp,
+                    isChecked = volumeEnabled,
+                    onClick = { viewModel.setGestureVolumeEnabled(!volumeEnabled) },
+                )
+                PreferenceSlider(
+                    title = stringResource(id = R.string.volume_gesture_sensitivity),
+                    description = "%.1f×".format(volumeSensitivity),
+                    icon = NextIcons.Sensitivity,
+                    enabled = volumeEnabled,
                     value = volumeSensitivity,
-                    enabled = true,
-                    onValueChange = { viewModel.setGestureVolumeSensitivity(it) }
+                    valueRange = 0.1f..2.0f,
+                    onValueChange = { viewModel.setGestureVolumeSensitivity(it) },
                 )
-            }
-
-            // Zoom gesture
-            GestureToggleItem(
-                title = "Zoom gesture",
-                subtitle = "Pinch to zoom the video",
-                icon = Icons.Rounded.ZoomOutMap,
-                checked = zoomEnabled,
-                onCheckedChange = { viewModel.setGestureZoomEnabled(it) }
-            )
-
-            // Pan gesture
-            GestureToggleItem(
-                title = "Pan gesture",
-                subtitle = "Zoom and pan the video",
-                icon = Icons.Rounded.PanToolAlt,
-                checked = panEnabled,
-                onCheckedChange = { viewModel.setGesturePanEnabled(it) }
-            )
-
-            // Double tap gesture
-            GestureToggleItem(
-                title = "Double tap gesture",
-                subtitle = "Select double tap gesture action",
-                icon = Icons.Rounded.TouchApp,
-                checked = doubleTapEnabled,
-                onCheckedChange = { viewModel.setGestureDoubleTapEnabled(it) }
-            )
-        }
-    }
-}
-
-@Composable
-fun GestureToggleItem(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    showTopDivider: Boolean = false
-) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        if (showTopDivider) {
-            HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.zoom_gesture),
+                    description = stringResource(id = R.string.zoom_gesture_description),
+                    icon = NextIcons.Pinch,
+                    isChecked = zoomEnabled,
+                    onClick = { viewModel.setGestureZoomEnabled(!zoomEnabled) },
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.pan_gesture),
+                    description = stringResource(id = R.string.pan_gesture_description),
+                    icon = NextIcons.Pan,
+                    isChecked = panEnabled,
+                    onClick = { viewModel.setGesturePanEnabled(!panEnabled) },
                 )
-            }
-            com.ghost.video.ui.components.SmoothSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-    }
-}
-
-@Composable
-fun GestureSensitivityItem(
-    title: String,
-    value: Float,
-    enabled: Boolean,
-    onValueChange: (Float) -> Unit
-) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Tune,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = if (enabled) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
-                Text(
-                    text = String.format("%.2f", value),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                PreferenceSwitch(
+                    title = stringResource(id = R.string.double_tap),
+                    description = stringResource(id = R.string.double_tap_description),
+                    icon = NextIcons.DoubleTap,
+                    isChecked = doubleTapEnabled,
+                    onClick = { viewModel.setGestureDoubleTapEnabled(!doubleTapEnabled) },
+                    isLastItem = true,
                 )
             }
         }
-        Box(modifier = Modifier.padding(bottom = 12.dp)) {
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = 0.1f..2.0f,
-                steps = 18,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant,
-                    activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
-                    inactiveTickColor = MaterialTheme.colorScheme.outline,
-                    disabledThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    disabledActiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f),
-                    disabledInactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                )
-            )
-        }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
     }
 }
