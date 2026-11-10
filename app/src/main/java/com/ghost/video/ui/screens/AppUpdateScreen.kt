@@ -1,5 +1,7 @@
 package com.ghost.video.ui.screens
 
+import com.ghost.video.ui.components.NextIcons
+import com.ghost.video.ui.components.NextTopAppBar
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -107,18 +109,19 @@ fun AppUpdateScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("About") },
+            NextTopAppBar(
+                title = "About",
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    FilledTonalIconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = NextIcons.ArrowBack,
+                            contentDescription = "Navigate up"
                         )
                     }
                 }
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) { padding ->
         LazyColumn(
             modifier = Modifier

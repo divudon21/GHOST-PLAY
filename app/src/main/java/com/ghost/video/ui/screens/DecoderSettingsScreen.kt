@@ -1,35 +1,42 @@
 package com.ghost.video.ui.screens
 
-import com.ghost.video.ui.components.CapsuleSwitcherCard
-import com.ghost.video.ui.components.CapsuleSwitcherOption
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.DeveloperBoard
-import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.R
 import com.ghost.video.data.DecoderPriority
+import com.ghost.video.ui.components.ListSectionTitle
+import com.ghost.video.ui.components.NextIcons
+import com.ghost.video.ui.components.NextTopAppBar
+import com.ghost.video.ui.components.SingleSelectablePreference
 import com.ghost.video.viewmodel.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Decoder preferences, laid out with NextPlayer's settings structure
+ * (section title + segmented single-select list).
+ */
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+)
 @Composable
 fun DecoderSettingsScreen(
     onBack: () -> Unit,
@@ -37,114 +44,67 @@ fun DecoderSettingsScreen(
 ) {
     val currentPriority by viewModel.decoderPriority.collectAsState()
 
-    val priorities = listOf(
-        DecoderOption(
-            title = "Prefer device decoders",
-            subtitle = "Use hardware accelerated decoders when available",
-            icon = Icons.Rounded.DeveloperBoard,
-            priority = DecoderPriority.PREFER_DEVICE
-        ),
-        DecoderOption(
-            title = "Prefer app decoders",
-            subtitle = "Use software decoders bundled with the app",
-            icon = Icons.Rounded.Tune,
-            priority = DecoderPriority.PREFER_APP
-        ),
-        DecoderOption(
-            title = "Device decoders only",
-            subtitle = "Only use hardware accelerated decoders",
-            icon = Icons.Rounded.Memory,
-            priority = DecoderPriority.DEVICE_ONLY
-        )
-    )
-
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Decoder") },
+            NextTopAppBar(
+                title = stringResource(id = R.string.decoder),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    FilledTonalIconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = NextIcons.ArrowBack,
+                            contentDescription = stringResource(id = R.string.navigate_up),
                         )
                     }
-                }
+                },
             )
-        }
-    ) { padding ->
-        LazyColumn(
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
+                .verticalScroll(state = rememberScrollState())
+                .padding(paddingValues = innerPadding)
+                .padding(horizontal = 16.dp),
         ) {
-            item {
-                CapsuleSwitcherCard(
-                    title = "Decoder",
-                    titleIcon = Icons.Rounded.Memory,
-                    options = listOf(
-                        CapsuleSwitcherOption("Device", Icons.Rounded.DeveloperBoard),
-                        CapsuleSwitcherOption("App", Icons.Rounded.Tune),
-                        CapsuleSwitcherOption("HW Only", Icons.Rounded.Memory)
-                    ),
-                    selectedIndex = currentPriority.ordinal,
-                    onSelected = { viewModel.setDecoderPriority(DecoderPriority.entries[it]) }
+            ListSectionTitle(text = stringResource(id = R.string.decoder))
+            Column(
+                modifier = Modifier.selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
+                SingleSelectablePreference(
+                    title = stringResource(id = R.string.prefer_device_decoders),
+                    description = stringResource(id = R.string.prefer_device_decoders_desc),
+                    selected = currentPriority == DecoderPriority.PREFER_DEVICE,
+                    onClick = {
+                        if (currentPriority != DecoderPriority.PREFER_DEVICE) {
+                            viewModel.setDecoderPriority(DecoderPriority.PREFER_DEVICE)
+                        }
+                    },
+                    isFirstItem = true,
                 )
-            }
-        }
-    }
-
-    }
-
-@Composable
-fun DecoderDialogOptionRow(
-    option: DecoderOption,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(
-                imageVector = option.icon,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = option.title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-            )
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary
+                SingleSelectablePreference(
+                    title = stringResource(id = R.string.prefer_app_decoders),
+                    description = stringResource(id = R.string.prefer_app_decoders_desc),
+                    selected = currentPriority == DecoderPriority.PREFER_APP,
+                    onClick = {
+                        if (currentPriority != DecoderPriority.PREFER_APP) {
+                            viewModel.setDecoderPriority(DecoderPriority.PREFER_APP)
+                        }
+                    },
+                )
+                SingleSelectablePreference(
+                    title = stringResource(id = R.string.device_decoders_only),
+                    description = stringResource(id = R.string.device_decoders_only_desc),
+                    selected = currentPriority == DecoderPriority.DEVICE_ONLY,
+                    onClick = {
+                        if (currentPriority != DecoderPriority.DEVICE_ONLY) {
+                            viewModel.setDecoderPriority(DecoderPriority.DEVICE_ONLY)
+                        }
+                    },
+                    isLastItem = true,
                 )
             }
         }
     }
 }
-
-
-
-data class DecoderOption(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val priority: DecoderPriority
-)
