@@ -1,10 +1,10 @@
 package com.ghost.video.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,11 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.SubtitleFont
-import com.ghost.video.ui.components.ClickablePreferenceItem
+import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
-import com.ghost.video.ui.components.OptionsDialog
+import com.ghost.video.ui.components.PreferenceItem
 import com.ghost.video.ui.components.PreferenceSlider
 import com.ghost.video.ui.components.PreferenceSwitch
 import com.ghost.video.ui.components.RadioTextButton
@@ -58,7 +58,7 @@ fun SubtitleSettingsScreen(
     val subtitleEmbeddedStyles by viewModel.subtitleEmbeddedStyles.collectAsState()
     val systemCaptionStyle by viewModel.systemCaptionStyle.collectAsState()
 
-    var showFontDialog by remember { mutableStateOf(false) }
+    var fontExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -95,12 +95,28 @@ fun SubtitleSettingsScreen(
                     onClick = { viewModel.setSystemCaptionStyle(!systemCaptionStyle) },
                     isFirstItem = true,
                 )
-                ClickablePreferenceItem(
+                PreferenceItem(
                     title = stringResource(id = R.string.subtitle_font),
                     description = currentFont.label(),
                     icon = NextIcons.Font,
-                    onClick = { showFontDialog = true },
+                    enabled = true,
+                    onClick = { fontExpanded = !fontExpanded },
                 )
+
+                AnimatedVisibility(visible = fontExpanded) {
+                    InlineOptionGroup {
+                        SubtitleFont.entries.forEach { font ->
+                            RadioTextButton(
+                                text = font.label(),
+                                selected = font == currentFont,
+                                onClick = {
+                                    viewModel.setSubtitleFont(font)
+                                    fontExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
                 PreferenceSwitch(
                     title = stringResource(id = R.string.subtitle_text_bold),
                     description = stringResource(id = R.string.subtitle_text_bold_desc),
@@ -130,24 +146,6 @@ fun SubtitleSettingsScreen(
                     isChecked = subtitleEmbeddedStyles,
                     onClick = { viewModel.setSubtitleEmbeddedStyles(!subtitleEmbeddedStyles) },
                     isLastItem = true,
-                )
-            }
-        }
-    }
-
-    if (showFontDialog) {
-        OptionsDialog(
-            text = stringResource(id = R.string.subtitle_font),
-            onDismissClick = { showFontDialog = false },
-        ) {
-            items(SubtitleFont.entries.toTypedArray()) { font ->
-                RadioTextButton(
-                    text = font.label(),
-                    selected = font == currentFont,
-                    onClick = {
-                        viewModel.setSubtitleFont(font)
-                        showFontDialog = false
-                    },
                 )
             }
         }

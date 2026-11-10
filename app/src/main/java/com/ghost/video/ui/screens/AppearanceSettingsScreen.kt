@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.AppColor
 import com.ghost.video.data.ThemePreference
+import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
@@ -206,20 +207,6 @@ private fun AppearanceSettingsScreenContent(
                 )
             }
         }
-    }
-}
-
-/** Container that makes an unfolded option list read like part of the segmented list. */
-@Composable
-private fun InlineOptionGroup(content: @Composable () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) { content() }
     }
 }
 
