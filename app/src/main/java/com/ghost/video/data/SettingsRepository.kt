@@ -323,7 +323,6 @@ class SettingsRepository(private val context: Context) {
             preferences[APP_COLOR_KEY] = appColor.ordinal
         }
     }
-    }
 
     suspend fun setAppTextStyle(style: AppTextStyle) {
         context.dataStore.edit { preferences ->
