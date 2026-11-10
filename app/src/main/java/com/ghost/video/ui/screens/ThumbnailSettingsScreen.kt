@@ -1,5 +1,7 @@
 package com.ghost.video.ui.screens
 
+import com.ghost.video.ui.components.CapsuleSwitcherCard
+import com.ghost.video.ui.components.CapsuleSwitcherOption
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween

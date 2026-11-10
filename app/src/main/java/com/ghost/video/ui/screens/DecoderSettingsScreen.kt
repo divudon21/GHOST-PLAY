@@ -1,5 +1,7 @@
 package com.ghost.video.ui.screens
 
+import com.ghost.video.ui.components.CapsuleSwitcherCard
+import com.ghost.video.ui.components.CapsuleSwitcherOption
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
