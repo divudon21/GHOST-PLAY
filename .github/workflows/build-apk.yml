@@ -109,7 +109,7 @@ jobs:
           METADATA=$(VERSION_NAME="$VERSION_NAME" VERSION_CODE="$VERSION_CODE" SIGNER="$SIGNER" python3 -c 'import json,os; print(json.dumps({"packageName":"com.ghost.video","versionName":os.environ["VERSION_NAME"],"versionCode":int(os.environ["VERSION_CODE"]),"signerSha256":os.environ["SIGNER"]},separators=(",",":")))')
           PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | sed -n '1p' || true)
           mkdir -p ci
-          cat <<EOF > ci/release_notes.md
+          cat <<EOF | sed 's/^[[:space:]]*//' > ci/release_notes.md
           ## Ghost Play ${VERSION_NAME}
 
           Version code ${VERSION_CODE}.
