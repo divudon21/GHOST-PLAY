@@ -158,8 +158,7 @@ fun SettingsScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                ),
-                contentPadding = PaddingValues(horizontal = 8.dp)
+                )
             )
         }
     ) { padding ->
