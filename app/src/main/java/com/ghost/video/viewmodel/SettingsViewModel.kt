@@ -277,13 +277,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
-    val updateNotifications: StateFlow<Boolean> = repository.updateNotifications
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = false
-        )
-
     val loadingIndicatorStyle: StateFlow<LoadingIndicatorStyle> = repository.loadingIndicatorStyle
         .stateIn(
             scope = viewModelScope,
@@ -427,14 +420,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setHighContrastDark(enabled: Boolean) {
         viewModelScope.launch { repository.setHighContrastDark(enabled) }
-    }
-
-    fun setUpdateNotifications(enabled: Boolean) {
-        viewModelScope.launch { repository.setUpdateNotifications(enabled) }
-    }
-
-    fun setLastSeenRelease(tag: String) {
-        viewModelScope.launch { repository.setLastSeenRelease(tag) }
     }
 
     fun setLoadingIndicatorStyle(style: LoadingIndicatorStyle) {

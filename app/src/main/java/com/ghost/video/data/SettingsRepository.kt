@@ -61,6 +61,14 @@ data class ThemeSettings(
     val highContrastDark: Boolean
 )
 
+/** Update options persisted by the Updates settings screen. */
+data class UpdatesPreferences(
+    val autoCheck: Boolean = true,
+    val notifications: Boolean = true,
+    val includeBeta: Boolean = false,
+    val popup: Boolean = true,
+)
+
 enum class ThumbnailStrategy {
     FIRST_FRAME, FRAME_AT_POSITION, HYBRID
 }
@@ -126,8 +134,11 @@ class SettingsRepository(private val context: Context) {
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
-    private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
-    private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
+    private val UPDATES_AUTO_CHECK_KEY = booleanPreferencesKey("updates_auto_check")
+    private val UPDATES_NOTIFICATIONS_KEY = booleanPreferencesKey("updates_notifications")
+    private val UPDATES_INCLUDE_BETA_KEY = booleanPreferencesKey("updates_include_beta")
+    private val UPDATES_POPUP_KEY = booleanPreferencesKey("updates_popup")
+    private val UPDATES_NOTIFIED_BUILD_KEY = intPreferencesKey("updates_notified_build")
     private val LOADING_INDICATOR_STYLE_KEY = intPreferencesKey("loading_indicator_style")
     private val PLAYBACK_POSITIONS_KEY = stringPreferencesKey("playback_positions_map")
     private val AUDIO_TRACKS_KEY = stringPreferencesKey("audio_tracks_map")
@@ -297,11 +308,19 @@ class SettingsRepository(private val context: Context) {
     val highContrastDark: Flow<Boolean> = context.dataStore.data
         .map { it[HIGH_CONTRAST_DARK_KEY] ?: false }
 
-    val updateNotifications: Flow<Boolean> = context.dataStore.data
-        .map { it[UPDATE_NOTIFICATIONS_KEY] ?: false }
+    /** Update preferences, matching DownList's UpdateService options. */
+    val updatesPreferences: Flow<UpdatesPreferences> = context.dataStore.data
+        .map { preferences ->
+            UpdatesPreferences(
+                autoCheck = preferences[UPDATES_AUTO_CHECK_KEY] ?: true,
+                notifications = preferences[UPDATES_NOTIFICATIONS_KEY] ?: true,
+                includeBeta = preferences[UPDATES_INCLUDE_BETA_KEY] ?: false,
+                popup = preferences[UPDATES_POPUP_KEY] ?: true,
+            )
+        }
 
-    val lastSeenRelease: Flow<String> = context.dataStore.data
-        .map { it[LAST_SEEN_RELEASE_KEY] ?: "" }
+    val updatesNotifiedBuild: Flow<Int> = context.dataStore.data
+        .map { it[UPDATES_NOTIFIED_BUILD_KEY] ?: 0 }
 
     val loadingIndicatorStyle: Flow<LoadingIndicatorStyle> = context.dataStore.data
         .map { LoadingIndicatorStyle.ROUNDED_POLYGON }
@@ -462,12 +481,24 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[HIGH_CONTRAST_DARK_KEY] = enabled }
     }
 
-    suspend fun setUpdateNotifications(enabled: Boolean) {
-        context.dataStore.edit { it[UPDATE_NOTIFICATIONS_KEY] = enabled }
+    suspend fun setUpdatesAutoCheck(enabled: Boolean) {
+        context.dataStore.edit { it[UPDATES_AUTO_CHECK_KEY] = enabled }
     }
 
-    suspend fun setLastSeenRelease(tag: String) {
-        context.dataStore.edit { it[LAST_SEEN_RELEASE_KEY] = tag }
+    suspend fun setUpdatesNotifications(enabled: Boolean) {
+        context.dataStore.edit { it[UPDATES_NOTIFICATIONS_KEY] = enabled }
+    }
+
+    suspend fun setUpdatesIncludeBeta(enabled: Boolean) {
+        context.dataStore.edit { it[UPDATES_INCLUDE_BETA_KEY] = enabled }
+    }
+
+    suspend fun setUpdatesPopup(enabled: Boolean) {
+        context.dataStore.edit { it[UPDATES_POPUP_KEY] = enabled }
+    }
+
+    suspend fun setUpdatesNotifiedBuild(versionCode: Int) {
+        context.dataStore.edit { it[UPDATES_NOTIFIED_BUILD_KEY] = versionCode }
     }
 
     suspend fun setLoadingIndicatorStyle(style: LoadingIndicatorStyle) {
@@ -476,12 +507,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun resetAllSettings() {
         context.dataStore.edit { preferences ->
-            // Keep the "already seen this release" marker: resetting preferences
-            // should not make the update notification fire again for a version the
-            // user has already been told about.
-            val lastSeen = preferences[LAST_SEEN_RELEASE_KEY]
+            // Keep the "already notified about this build" marker: resetting
+            // preferences should not make the update notification fire again for a
+            // build the user has already been told about.
+            val notifiedBuild = preferences[UPDATES_NOTIFIED_BUILD_KEY]
             preferences.clear()
-            if (lastSeen != null) preferences[LAST_SEEN_RELEASE_KEY] = lastSeen
+            if (notifiedBuild != null) preferences[UPDATES_NOTIFIED_BUILD_KEY] = notifiedBuild
         }
     }
 

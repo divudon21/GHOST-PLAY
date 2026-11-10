@@ -50,7 +50,7 @@ fun SettingsScreen(
     onNavigateToAudio: () -> Unit = {},
     onNavigateToSubtitle: () -> Unit = {},
     onNavigateToGeneral: () -> Unit = {},
-    onNavigateToAppUpdate: () -> Unit = {},
+    onNavigateToUpdates: () -> Unit = {},
     onSwipeNext: () -> Unit = {},
     onSwipePrevious: () -> Unit = {}
 ) {
@@ -112,10 +112,10 @@ fun SettingsScreen(
             onClick = onNavigateToGeneral
         ),
         SettingsCategory(
-            title = "App update",
+            title = "Updates",
             subtitle = "Check for new versions",
             icon = NextIcons.Update,
-            onClick = onNavigateToAppUpdate
+            onClick = onNavigateToUpdates
         )
     )
 

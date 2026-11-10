@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.CompareArrows
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -35,6 +36,10 @@ import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.DoubleArrow
 import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FileOpen
@@ -167,6 +172,12 @@ object NextIcons {
     val Timer = Icons.Rounded.Timer
     val Title = Icons.Rounded.Title
     val Update = Icons.Rounded.Update
+    val Refresh = Icons.Rounded.Refresh
+    val Notifications = Icons.Rounded.Notifications
+    val Science = Icons.Rounded.Science
+    val OpenInNew = Icons.AutoMirrored.Rounded.OpenInNew
+    val Error = Icons.Rounded.ErrorOutline
+    val CheckCircle = Icons.Rounded.CheckCircle
     val Video = Icons.Rounded.Movie
     val VolumeUp = Icons.AutoMirrored.Rounded.VolumeUp
     val ButtonsPosition = Icons.Rounded.AppSettingsAlt
