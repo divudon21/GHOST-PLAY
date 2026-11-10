@@ -1,5 +1,7 @@
 package com.ghost.video.ui.screens
 
+import com.ghost.video.ui.components.CapsuleSwitcherCard
+import com.ghost.video.ui.components.CapsuleSwitcherOption
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility

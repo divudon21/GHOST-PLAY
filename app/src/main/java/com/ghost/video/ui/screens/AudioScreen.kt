@@ -53,7 +53,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.ui.components.EmptyState
 import com.ghost.video.ui.components.ListSectionTitle
-import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextSegmentedListItem
 import com.ghost.video.ui.components.NextTopAppBar
 import com.ghost.video.ui.components.tabSwipe
@@ -199,7 +198,7 @@ fun AudioScreen(
     }
 
     // Same chrome as the Settings and Home tabs: surfaceContainer painting the
-    // notch area, shared NextTopAppBar, then a sectioned music list.
+    // notch area, the shared NextTopAppBar, then a sectioned music list.
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -214,7 +213,7 @@ fun AudioScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             )
@@ -301,7 +300,9 @@ fun AudioScreen(
 
             else -> {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                    verticalArrangement = Arrangement.spacedBy(
+                        androidx.compose.material3.ListItemDefaults.SegmentedGap
+                    ),
                     modifier = Modifier.weight(1f)
                 ) {
                     itemsIndexed(localAudios, key = { _, audio -> audio.uri }) { index, audio ->
@@ -432,7 +433,10 @@ private fun AlbumArt(bitmap: Bitmap?) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(
+    ExperimentalFoundationApi::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 @Composable
 fun AudioListItem(
     audio: LocalAudio,
@@ -511,16 +515,55 @@ fun AudioListItem(
                     )
                 }
             },
-        ) {
-            Text(
-                text = audio.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            content = {
+                Text(
+                    text = audio.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+        )
+
+        // Long-press context menu: same options as the video 3-dot menu.
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Play") },
+                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                onClick = { menuExpanded = false; onClick() }
+            )
+            DropdownMenuItem(
+                text = { Text("Share") },
+                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                onClick = {
+                    menuExpanded = false
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "audio/*"
+                        putExtra(Intent.EXTRA_STREAM, Uri.parse(audio.uri))
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share audio"))
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Rename") },
+                leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                onClick = { menuExpanded = false; showRename = true }
+            )
+            DropdownMenuItem(
+                text = { Text("Details") },
+                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                onClick = { menuExpanded = false; showDetails = true }
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                onClick = {
+                    menuExpanded = false
+                    deleteAudio(context, audio, deleteLauncher::launch, onChanged)
+                }
             )
         }
-
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }
-
     }
 
     if (showDetails) {
