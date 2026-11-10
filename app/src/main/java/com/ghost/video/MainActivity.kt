@@ -577,6 +577,7 @@ fun MainApp(
             ) {
                 SettingsScreen(
                     viewModel = sharedSettingsViewModel,
+                    onBack = { navController.popBackStack() },
                     onNavigateToAppearance = {
                         navController.navigate("appearance_settings") { launchSingleTop = true }
                     },

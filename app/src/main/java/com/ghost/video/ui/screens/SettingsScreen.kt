@@ -3,21 +3,22 @@ package com.ghost.video.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.BatterySaver
-import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.Gesture
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -34,10 +35,19 @@ import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
 
+/**
+ * Settings list, styled after NextPlayer's settings screen
+ * (https://github.com/anilbeesetti/nextplayer): a top app bar with a tonal
+ * back button and title, followed by segmented card rows — leading icon,
+ * bold title and a smaller description, with no trailing chevron. Each row
+ * is its own rounded card separated by a small gap, instead of the old
+ * divider-separated list.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
+    onBack: () -> Unit = {},
     onNavigateToAppearance: () -> Unit = {},
     onNavigateToPlayer: () -> Unit = {},
     onNavigateToThumbnail: () -> Unit = {},
@@ -51,7 +61,6 @@ fun SettingsScreen(
     onSwipeNext: () -> Unit = {},
     onSwipePrevious: () -> Unit = {}
 ) {
-    val currentTheme by viewModel.themePreference.collectAsState()
     val currentStrategy by viewModel.thumbnailStrategy.collectAsState()
 
     val strategyLabel = when (currentStrategy) {
@@ -70,7 +79,7 @@ fun SettingsScreen(
         SettingsCategory(
             title = "Player",
             subtitle = "Player appearance, playback controls",
-            icon = Icons.Rounded.PlayCircleOutline,
+            icon = Icons.Rounded.PlayCircle,
             onClick = onNavigateToPlayer
         ),
         SettingsCategory(
@@ -130,33 +139,44 @@ fun SettingsScreen(
         // insets, so tell this inner Scaffold not to add them a second time
         // (otherwise the list gets an extra gap under the title and at the bottom).
         contentWindowInsets = WindowInsets(0.dp),
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            // Tab header consistent with the other top-level tabs (titleLarge).
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Settings",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    FilledTonalIconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(state = rememberScrollState())
                 .padding(padding)
                 .padding(horizontal = 16.dp)
+                .padding(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(categories.size) { index ->
-                val category = categories[index]
+            categories.forEach { category ->
                 SettingsCategoryCard(
                     title = category.title,
                     subtitle = category.subtitle,
                     icon = category.icon,
                     onClick = category.onClick,
-                    showTopDivider = index == 0,
                     highlightSubtitle = category.highlightSubtitle
                 )
             }
@@ -164,27 +184,31 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * One segmented settings row: a rounded card with a leading icon, a bold
+ * title and a smaller description underneath. No trailing chevron, matching
+ * NextPlayer's preference items.
+ */
 @Composable
 fun SettingsCategoryCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    showTopDivider: Boolean = false,
     highlightSubtitle: Boolean = false
 ) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        if (showTopDivider) {
-            HorizontalDivider(thickness = 0.6.dp, color = lineColor)
-        }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(vertical = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -196,6 +220,7 @@ fun SettingsCategoryCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -204,16 +229,10 @@ fun SettingsCategoryCard(
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (highlightSubtitle) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (highlightSubtitle) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
-        HorizontalDivider(thickness = 0.6.dp, color = lineColor)
     }
 }
 
@@ -292,4 +311,3 @@ data class ThemeOption(
     val icon: ImageVector,
     val preference: ThemePreference
 )
-
