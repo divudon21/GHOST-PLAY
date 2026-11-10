@@ -277,13 +277,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
-    val useDynamicColors: StateFlow<Boolean> = repository.useDynamicColors
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = false
-        )
-
     val updateNotifications: StateFlow<Boolean> = repository.updateNotifications
         .stateIn(
             scope = viewModelScope,
@@ -434,10 +427,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setHighContrastDark(enabled: Boolean) {
         viewModelScope.launch { repository.setHighContrastDark(enabled) }
-    }
-
-    fun setUseDynamicColors(enabled: Boolean) {
-        viewModelScope.launch { repository.setUseDynamicColors(enabled) }
     }
 
     fun setUpdateNotifications(enabled: Boolean) {

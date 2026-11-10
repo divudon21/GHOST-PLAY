@@ -297,8 +297,7 @@ class MainActivity : ComponentActivity() {
                 appColor = startupTheme?.appColor ?: AppColor.PURPLE,
                 textStyle = startupTheme?.textStyle ?: AppTextStyle.DEFAULT,
                 boldText = startupTheme?.boldText ?: false,
-                highContrastDark = startupTheme?.highContrastDark ?: false,
-                useDynamicColors = startupTheme?.useDynamicColors ?: false
+                highContrastDark = startupTheme?.highContrastDark ?: false
             ) {
                 MainApp(
                     externalVideoUrl = pendingExternalUrl,

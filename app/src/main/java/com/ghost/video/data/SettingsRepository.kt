@@ -58,8 +58,7 @@ data class ThemeSettings(
     val appColor: AppColor,
     val textStyle: AppTextStyle,
     val boldText: Boolean,
-    val highContrastDark: Boolean,
-    val useDynamicColors: Boolean
+    val highContrastDark: Boolean
 )
 
 enum class ThumbnailStrategy {
@@ -127,7 +126,6 @@ class SettingsRepository(private val context: Context) {
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
-    private val USE_DYNAMIC_COLORS_KEY = booleanPreferencesKey("use_dynamic_colors")
     private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
     private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
     private val LOADING_INDICATOR_STYLE_KEY = intPreferencesKey("loading_indicator_style")
@@ -158,8 +156,7 @@ class SettingsRepository(private val context: Context) {
                     preferences[TEXT_STYLE_KEY] ?: AppTextStyle.DEFAULT.ordinal
                 ) { AppTextStyle.DEFAULT },
                 boldText = preferences[BOLD_TEXT_KEY] ?: false,
-                highContrastDark = preferences[HIGH_CONTRAST_DARK_KEY] ?: false,
-                useDynamicColors = preferences[USE_DYNAMIC_COLORS_KEY] ?: false
+                highContrastDark = preferences[HIGH_CONTRAST_DARK_KEY] ?: false
             )
         }
         .distinctUntilChanged()
@@ -299,9 +296,6 @@ class SettingsRepository(private val context: Context) {
 
     val highContrastDark: Flow<Boolean> = context.dataStore.data
         .map { it[HIGH_CONTRAST_DARK_KEY] ?: false }
-
-    val useDynamicColors: Flow<Boolean> = context.dataStore.data
-        .map { it[USE_DYNAMIC_COLORS_KEY] ?: false }
 
     val updateNotifications: Flow<Boolean> = context.dataStore.data
         .map { it[UPDATE_NOTIFICATIONS_KEY] ?: false }
@@ -466,10 +460,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setHighContrastDark(enabled: Boolean) {
         context.dataStore.edit { it[HIGH_CONTRAST_DARK_KEY] = enabled }
-    }
-
-    suspend fun setUseDynamicColors(enabled: Boolean) {
-        context.dataStore.edit { it[USE_DYNAMIC_COLORS_KEY] = enabled }
     }
 
     suspend fun setUpdateNotifications(enabled: Boolean) {
