@@ -63,8 +63,8 @@ android {
 
     configurations.all {
         resolutionStrategy.force(
-            "androidx.compose.material3:material3:1.4.0-alpha10",
-            "androidx.compose.material3:material3-android:1.4.0-alpha10"
+            "androidx.compose.material3:material3:1.5.0-alpha15",
+            "androidx.compose.material3:material3-android:1.5.0-alpha15"
         )
     }
 
@@ -82,12 +82,9 @@ android {
 }
 
 dependencies {
-    // Aligned with NextPlayer (BOM 2026.09.00 + M3 1.5.0-alpha15) so the
-    // Expressive SegmentedListItem APIs resolve.
-    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.01.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material3:material3:1.5.0-alpha15")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
