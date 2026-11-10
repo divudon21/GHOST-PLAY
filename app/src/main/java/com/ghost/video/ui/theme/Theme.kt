@@ -6,8 +6,6 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -218,27 +216,12 @@ fun AgonAppTheme(
     textStyle: AppTextStyle = AppTextStyle.DEFAULT,
     boldText: Boolean = false,
     highContrastDark: Boolean = false,
-    useDynamicColors: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val isSystemDark = isSystemInDarkTheme()
 
-    // Dynamic color (NextPlayer's "Dynamic color theme"): the wallpaper-derived
-    // Material You scheme replaces the generated app-colour scheme on Android 12+.
-    val context = LocalContext.current
-    val dynamicColorsSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val useDynamic = useDynamicColors && dynamicColorsSupported
-
-    val darkScheme = if (useDynamic) {
-        dynamicDarkColorScheme(context)
-    } else {
-        appColorScheme(appColor, isDark = true)
-    }
-    val lightScheme = if (useDynamic) {
-        dynamicLightColorScheme(context)
-    } else {
-        appColorScheme(appColor, isDark = false)
-    }
+    val darkScheme = appColorScheme(appColor, isDark = true)
+    val lightScheme = appColorScheme(appColor, isDark = false)
 
     // High contrast variant for DARK theme
     val highContrastDarkScheme = darkScheme.copy(

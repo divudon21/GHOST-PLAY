@@ -17,7 +17,17 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -27,6 +37,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
@@ -52,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.ui.components.EmptyState
-import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextSegmentedListItem
 import com.ghost.video.ui.components.NextTopAppBar
 import com.ghost.video.ui.components.tabSwipe
@@ -215,6 +225,11 @@ fun AudioScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                },
+                actions = {
+                    if (localAudios.isNotEmpty()) {
+                        TotalAudioBadge(count = localAudios.size)
+                    }
                 }
             )
         }
@@ -225,11 +240,6 @@ fun AudioScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            ListSectionTitle(
-                text = if (localAudios.isEmpty()) "Local audio"
-                else "Local audio · ${localAudios.size}"
-            )
-
             when {
             !hasPermission -> {
                 Column(
@@ -403,6 +413,57 @@ suspend fun loadLocalAudiosPage(
         }
     }
     audios
+}
+
+/**
+ * "Total audio <count>" pill shown at the top right of the Audio tab. The count
+ * animates with Material 3 motion (scale + fade) and the pill itself resizes
+ * smoothly as the number gains digits.
+ */
+@Composable
+private fun TotalAudioBadge(count: Int) {
+    Surface(
+        modifier = Modifier.animateContentSize(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        ),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = "Total audio",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+            )
+            AnimatedContent(
+                targetState = count,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(220)) +
+                        scaleIn(initialScale = 0.7f, animationSpec = tween(220)))
+                        .togetherWith(
+                            fadeOut(animationSpec = tween(120)) +
+                                scaleOut(targetScale = 0.7f, animationSpec = tween(120))
+                        )
+                },
+                label = "totalAudioCount",
+            ) { value ->
+                Text(
+                    text = value.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
 }
 
 /** Rounded album art used as the leading content of a music list item. */

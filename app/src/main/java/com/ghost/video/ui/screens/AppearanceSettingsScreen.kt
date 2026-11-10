@@ -1,6 +1,5 @@
 package com.ghost.video.ui.screens
 
-import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -65,14 +64,12 @@ fun AppearanceSettingsScreen(
 ) {
     val themePreference by viewModel.themePreference.collectAsState()
     val highContrastDark by viewModel.highContrastDark.collectAsState()
-    val useDynamicColors by viewModel.useDynamicColors.collectAsState()
     val appColor by viewModel.appColor.collectAsState()
 
     AppearanceSettingsScreenContent(
         state = AppearanceSettingsUiState(
             themePreference = themePreference,
             useHighContrastDarkTheme = highContrastDark,
-            useDynamicColors = useDynamicColors,
             appColor = appColor,
         ),
         onAction = { action ->
@@ -88,9 +85,6 @@ fun AppearanceSettingsScreen(
 
                 is AppearanceSettingsEvent.UpdateAppColor ->
                     viewModel.setAppColor(action.appColor)
-
-                is AppearanceSettingsEvent.ToggleUseDynamicColors ->
-                    viewModel.setUseDynamicColors(!useDynamicColors)
 
                 is AppearanceSettingsEvent.ToggleUseHighContrastDarkTheme ->
                     viewModel.setHighContrastDark(!highContrastDark)
@@ -208,18 +202,8 @@ private fun AppearanceSettingsScreenContent(
                     onClick = {
                         onAction(AppearanceSettingsEvent.ToggleUseHighContrastDarkTheme)
                     },
-                    isLastItem = !supportsDynamicTheming(),
+                    isLastItem = true,
                 )
-                if (supportsDynamicTheming()) {
-                    PreferenceSwitch(
-                        title = stringResource(id = R.string.dynamic_theme),
-                        description = stringResource(id = R.string.dynamic_theme_description),
-                        icon = NextIcons.Appearance,
-                        isChecked = state.useDynamicColors,
-                        onClick = { onAction(AppearanceSettingsEvent.ToggleUseDynamicColors) },
-                        isLastItem = true,
-                    )
-                }
             }
         }
     }
@@ -311,14 +295,11 @@ private fun ThemePreference.name(): String {
     return stringResource(id = stringRes)
 }
 
-private fun supportsDynamicTheming(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-
 private enum class AppearanceSection { Theme, Color }
 
 data class AppearanceSettingsUiState(
     val themePreference: ThemePreference = ThemePreference.SYSTEM,
     val useHighContrastDarkTheme: Boolean = false,
-    val useDynamicColors: Boolean = false,
     val appColor: AppColor = AppColor.PURPLE,
 )
 
@@ -327,6 +308,5 @@ sealed interface AppearanceSettingsEvent {
     data object ToggleDarkTheme : AppearanceSettingsEvent
     data class UpdateThemeConfig(val themePreference: ThemePreference) : AppearanceSettingsEvent
     data class UpdateAppColor(val appColor: AppColor) : AppearanceSettingsEvent
-    data object ToggleUseDynamicColors : AppearanceSettingsEvent
     data object ToggleUseHighContrastDarkTheme : AppearanceSettingsEvent
 }
