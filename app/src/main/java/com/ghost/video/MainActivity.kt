@@ -51,7 +51,6 @@ import com.ghost.video.viewmodel.AudioViewModel
 import com.ghost.video.ui.screens.AudioPlayerScreen
 import com.ghost.video.ui.screens.AudioScreen
 import com.ghost.video.ui.screens.AudioSettingsScreen
-import com.ghost.video.ui.screens.BatterySaverScreen
 import com.ghost.video.ui.screens.AppUpdateScreen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -510,6 +509,10 @@ fun MainApp(
         // The bottom bar already slides via AnimatedVisibility and the content
         // cross-fades, so the bar appear/disappear is still smooth.
         val isTabRoute = currentRoute in showBottomNavRoutes
+        // The Settings tab draws edge-to-edge: its own Scaffold fills the status
+        // bar / notch area with the settings background and the top app bar applies
+        // the status bar inset itself. Without this the notch strip stayed bare.
+        val edgeToEdgeTop = currentRoute == "settings"
         val layoutDirection = LocalLayoutDirection.current
         NavHost(
             navController = navController,
@@ -517,7 +520,7 @@ fun MainApp(
             modifier = Modifier
                 .nestedScroll(navBarScrollConnection)
                 .padding(
-                    top = if (isTabRoute) innerPadding.calculateTopPadding() else 0.dp,
+                    top = if (isTabRoute && !edgeToEdgeTop) innerPadding.calculateTopPadding() else 0.dp,
                     bottom = if (isTabRoute) innerPadding.calculateBottomPadding() else 0.dp,
                     start = if (isTabRoute) innerPadding.calculateStartPadding(layoutDirection) else 0.dp,
                     end = if (isTabRoute) innerPadding.calculateEndPadding(layoutDirection) else 0.dp
@@ -594,7 +597,6 @@ fun MainApp(
                     onNavigateToAudio = { navController.navigate("audio_settings") { launchSingleTop = true } },
                     onNavigateToSubtitle = { navController.navigate("subtitle_settings") { launchSingleTop = true } },
                     onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } },
-                    onNavigateToBatterySaver = { navController.navigate("battery_saver") { launchSingleTop = true } },
                     onNavigateToAppUpdate = { navController.navigate("app_update") { launchSingleTop = true } },
                     onSwipeNext = { swipeToAdjacentTab(1) },
                     onSwipePrevious = { swipeToAdjacentTab(-1) }
@@ -692,18 +694,6 @@ fun MainApp(
                 popExitTransition = { TAB_SLIDE_OUT_RIGHT }
             ) {
                 AudioSettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    viewModel = sharedSettingsViewModel
-                )
-            }
-            composable(
-                "battery_saver",
-                enterTransition = { TAB_SLIDE_IN_RIGHT },
-                exitTransition = { TAB_SLIDE_OUT_LEFT },
-                popEnterTransition = { TAB_SLIDE_IN_LEFT },
-                popExitTransition = { TAB_SLIDE_OUT_RIGHT }
-            ) {
-                BatterySaverScreen(
                     onBack = { navController.popBackStack() },
                     viewModel = sharedSettingsViewModel
                 )
