@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.ghost.video.R
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.tvFocusRing
