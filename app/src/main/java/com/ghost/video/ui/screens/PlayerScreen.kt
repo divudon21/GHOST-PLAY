@@ -143,7 +143,7 @@ fun PlayerScreen(url: String) {
     val subtitleBackground by settingsRepository.subtitleBackground.collectAsState(initial = false)
     val subtitleEmbeddedStyles by settingsRepository.subtitleEmbeddedStyles.collectAsState(initial = true)
     val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
-    val appPalette by settingsRepository.appPalette.collectAsState(initial = com.ghost.video.data.AppPalette.MONOCHROME)
+    val appColor by settingsRepository.appColor.collectAsState(initial = com.ghost.video.data.AppColor.PURPLE)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
     val loadingIndicatorStyle by settingsRepository.loadingIndicatorStyle.collectAsState(
         initial = com.ghost.video.data.LoadingIndicatorStyle.ROUNDED_POLYGON
@@ -560,7 +560,7 @@ fun PlayerScreen(url: String) {
     }
     
     // Get dialog colors based on preference
-    val dialogColors = rememberDialogColors(dialogThemePreference, appPalette, themePreference)
+    val dialogColors = rememberDialogColors(dialogThemePreference, appColor, themePreference)
     
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -1434,12 +1434,12 @@ class PlayerGestureHandler(
 @Composable
 fun rememberDialogColors(
     dialogTheme: DialogThemePreference,
-    palette: com.ghost.video.data.AppPalette,
+    appColor: com.ghost.video.data.AppColor,
     themePreference: ThemePreference
 ): DialogColors {
     val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
     
-    return remember(dialogTheme, palette, themePreference, isSystemDark) {
+    return remember(dialogTheme, appColor, themePreference, isSystemDark) {
         when (dialogTheme) {
             DialogThemePreference.FOLLOW_SYSTEM -> {
                 if (isSystemDark) DialogColors.Dark else DialogColors.Light
@@ -1447,7 +1447,7 @@ fun rememberDialogColors(
             DialogThemePreference.DARK -> DialogColors.Dark
             DialogThemePreference.LIGHT -> DialogColors.Light
             DialogThemePreference.CUSTOM -> {
-                val colorScheme = getColorScheme(palette, true)
+                val colorScheme = getColorScheme(appColor, true)
                 DialogColors.Custom(
                     backgroundColor = colorScheme.surface,
                     textColor = colorScheme.onSurface,

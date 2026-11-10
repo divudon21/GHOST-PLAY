@@ -27,9 +27,24 @@ enum class ThemePreference {
  * Curated Material 3 palettes. Each palette is a full multi-hue colour
  * combination (primary + secondary + tertiary), not a single static colour.
  */
-enum class AppPalette {
-    MONOCHROME, AURORA, SUNSET, OCEANIC, VERDANT,
-    MIDNIGHT, ROSEGOLD, EMERALD, LAVENDER, EMBER
+/**
+ * The twelve app colours. Each one is a single seed colour; the whole Material 3
+ * scheme (primary, secondary, tertiary and every surface role) is generated from
+ * it in ui/theme/Theme.kt.
+ */
+enum class AppColor(val seed: Long, val label: String) {
+    PURPLE(0xFF6750A4, "Purple"),
+    BLUE(0xFF1A73E8, "Blue"),
+    INDIGO(0xFF3949AB, "Indigo"),
+    CYAN(0xFF0097A7, "Cyan"),
+    TEAL(0xFF00897B, "Teal"),
+    GREEN(0xFF2E7D32, "Green"),
+    LIME(0xFF7CB342, "Lime"),
+    YELLOW(0xFFF9A825, "Yellow"),
+    ORANGE(0xFFEF6C00, "Orange"),
+    RED(0xFFD32F2F, "Red"),
+    PINK(0xFFD81B60, "Pink"),
+    SLATE(0xFF607D8B, "Slate"),
 }
 
 enum class AppTextStyle {
@@ -40,7 +55,7 @@ enum class AppTextStyle {
 /** Critical appearance values loaded together before the first app frame. */
 data class ThemeSettings(
     val theme: ThemePreference,
-    val palette: AppPalette,
+    val appColor: AppColor,
     val textStyle: AppTextStyle,
     val boldText: Boolean,
     val highContrastDark: Boolean,
@@ -78,7 +93,7 @@ enum class LoadingIndicatorStyle {
 
 class SettingsRepository(private val context: Context) {
     private val THEME_KEY = intPreferencesKey("theme_preference")
-    private val PALETTE_KEY = intPreferencesKey("app_palette")
+    private val APP_COLOR_KEY = intPreferencesKey("app_color")
     private val TEXT_STYLE_KEY = intPreferencesKey("app_text_style")
     private val BOLD_TEXT_KEY = booleanPreferencesKey("app_bold_text")
     private val THUMBNAIL_STRATEGY_KEY = intPreferencesKey("thumbnail_strategy")
@@ -136,9 +151,9 @@ class SettingsRepository(private val context: Context) {
                 theme = ThemePreference.entries.getOrElse(
                     preferences[THEME_KEY] ?: ThemePreference.SYSTEM.ordinal
                 ) { ThemePreference.SYSTEM },
-                palette = AppPalette.entries.getOrElse(
-                    preferences[PALETTE_KEY] ?: AppPalette.MONOCHROME.ordinal
-                ) { AppPalette.MONOCHROME },
+                appColor = AppColor.entries.getOrElse(
+                    preferences[APP_COLOR_KEY] ?: AppColor.PURPLE.ordinal
+                ) { AppColor.PURPLE },
                 textStyle = AppTextStyle.entries.getOrElse(
                     preferences[TEXT_STYLE_KEY] ?: AppTextStyle.DEFAULT.ordinal
                 ) { AppTextStyle.DEFAULT },
@@ -155,10 +170,10 @@ class SettingsRepository(private val context: Context) {
             ThemePreference.values().getOrElse(value) { ThemePreference.SYSTEM }
         }
 
-    val appPalette: Flow<AppPalette> = context.dataStore.data
+    val appColor: Flow<AppColor> = context.dataStore.data
         .map { preferences ->
-            val value = preferences[PALETTE_KEY] ?: AppPalette.MONOCHROME.ordinal
-            AppPalette.entries.getOrElse(value) { AppPalette.MONOCHROME }
+            val value = preferences[APP_COLOR_KEY] ?: AppColor.PURPLE.ordinal
+            AppColor.entries.getOrElse(value) { AppColor.PURPLE }
         }
 
     val appTextStyle: Flow<AppTextStyle> = context.dataStore.data
@@ -303,10 +318,11 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setAppPalette(palette: AppPalette) {
+    suspend fun setAppColor(appColor: AppColor) {
         context.dataStore.edit { preferences ->
-            preferences[PALETTE_KEY] = palette.ordinal
+            preferences[APP_COLOR_KEY] = appColor.ordinal
         }
+    }
     }
 
     suspend fun setAppTextStyle(style: AppTextStyle) {

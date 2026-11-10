@@ -3,7 +3,7 @@ package com.ghost.video.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.ghost.video.data.AppPalette
+import com.ghost.video.data.AppColor
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.DecoderPriority
 import com.ghost.video.data.OrientationPreference
@@ -39,11 +39,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = ThemePreference.SYSTEM
         )
 
-    val appPalette: StateFlow<AppPalette> = repository.appPalette
+    val appColor: StateFlow<AppColor> = repository.appColor
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = AppPalette.MONOCHROME
+            initialValue = AppColor.PURPLE
         )
 
     val appTextStyle: StateFlow<AppTextStyle> = repository.appTextStyle
@@ -452,8 +452,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { repository.setLoadingIndicatorStyle(style) }
     }
 
-    fun setAppPalette(palette: AppPalette) {
-        viewModelScope.launch { repository.setAppPalette(palette) }
+    fun setAppColor(appColor: AppColor) {
+        viewModelScope.launch { repository.setAppColor(appColor) }
     }
 
     fun setAppTextStyle(style: AppTextStyle) {
