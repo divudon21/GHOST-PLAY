@@ -7,7 +7,7 @@ import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -127,13 +127,10 @@ import com.ghost.video.data.AppColor
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
-import com.ghost.video.navigation.GhostNavigationBar
+import com.ghost.video.navigation.NextNavigationBar
 import com.ghost.video.navigation.GhostTopLevelDestination
 import com.ghost.video.ui.screens.SearchScreen
-import com.ghost.video.navigation.convx.floatingtabbar.FloatingTabBarInlineBehavior
-import com.ghost.video.navigation.convx.floatingtabbar.rememberFloatingTabBarScrollConnection
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import java.net.URLDecoder
 import kotlin.math.abs
 import kotlin.math.min
@@ -143,45 +140,45 @@ import kotlin.math.roundToInt
 // smooth return to the settings list without a noticeable jump or heavy motion.
 private const val ANIM_DURATION = 260
 
-private fun navTween(): FiniteAnimationSpec<IntOffset> = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
-private fun alphaTween() = tween<Float>(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
+// Navigation transitions are NextPlayer v0.17.5's own specs: every navigation
+// animation runs for 200 ms with linear easing, top-level tab switches cross-fade
+// and deeper screens slide in from the edge while the outgoing screen only drifts
+// by 30% of its width.
+private const val NAV_DURATION = 200
 
-// Small shared-axis travel prevents the settings list and child pages from
-// visually pulling against each other when the user presses Back.
+private fun navTween(): FiniteAnimationSpec<IntOffset> =
+    tween(durationMillis = NAV_DURATION, easing = LinearEasing)
+
+private fun navAlphaTween(): FiniteAnimationSpec<Float> =
+    tween(durationMillis = NAV_DURATION, easing = LinearEasing)
+
 private val TAB_SLIDE_IN_RIGHT = slideInHorizontally(
-    initialOffsetX = { it / 8 },
+    initialOffsetX = { it },
     animationSpec = navTween()
-) + fadeIn(animationSpec = alphaTween())
+)
 
 private val TAB_SLIDE_OUT_LEFT = slideOutHorizontally(
-    targetOffsetX = { -it / 10 },
+    targetOffsetX = { -(it * 0.3f).toInt() },
     animationSpec = navTween()
-) + fadeOut(animationSpec = alphaTween())
+)
 
 private val TAB_SLIDE_IN_LEFT = slideInHorizontally(
-    initialOffsetX = { -it / 8 },
+    initialOffsetX = { -(it * 0.3f).toInt() },
     animationSpec = navTween()
-) + fadeIn(animationSpec = alphaTween())
+)
 
 private val TAB_SLIDE_OUT_RIGHT = slideOutHorizontally(
-    targetOffsetX = { it / 10 },
+    targetOffsetX = { it },
     animationSpec = navTween()
-) + fadeOut(animationSpec = alphaTween())
+)
 
-private val FADE_IN = fadeIn(animationSpec = alphaTween())
-private val FADE_OUT = fadeOut(animationSpec = alphaTween())
+private val FADE_IN = fadeIn(animationSpec = navAlphaTween())
+private val FADE_OUT = fadeOut(animationSpec = navAlphaTween())
 
-// Tab switch transition: a short, cheap cross-fade. The full-screen horizontal
-// slide was removed — tabs are switched by a Telegram-style swipe gesture
-// (TabSwipe modifier) or by tapping the bottom nav. A fade has zero layout cost,
-// so it can't jitter the heavy video grid while it slides.
-private const val TAB_FADE_DURATION = 180
+// Top-level tabs cross-fade, exactly like NextPlayer's NavDisplay.
+private val TAB_ENTER = fadeIn(animationSpec = navAlphaTween())
 
-private val TAB_ENTER =
-    fadeIn(animationSpec = tween(durationMillis = TAB_FADE_DURATION, easing = FastOutSlowInEasing))
-
-private val TAB_EXIT =
-    fadeOut(animationSpec = tween(durationMillis = TAB_FADE_DURATION, easing = FastOutSlowInEasing))
+private val TAB_EXIT = fadeOut(animationSpec = navAlphaTween())
 
 class MainActivity : ComponentActivity() {
     // Latest external video handed to us through an ACTION_VIEW intent. Kept as
@@ -334,13 +331,6 @@ fun MainApp(
     val showBottomNavRoutes = GhostTopLevelDestination.entries.map { it.route }
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Convx's folding bar collapses to the selected tab while the content scrolls
-    // down and expands again on scroll up.
-    val navBarScrollConnection = rememberFloatingTabBarScrollConnection(
-        inlineBehavior = FloatingTabBarInlineBehavior.OnScrollDown
-    )
-    LaunchedEffect(currentRoute) { navBarScrollConnection.expand() }
-
     fun selectTab(destination: GhostTopLevelDestination) {
         if (currentRoute == destination.route) return
         navController.navigate(destination.route) {
@@ -484,17 +474,16 @@ fun MainApp(
                     visible = currentRoute in showBottomNavRoutes,
                     enter = slideInVertically(
                         initialOffsetY = { it },
-                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)),
+                        animationSpec = tween(NAV_DURATION, easing = LinearEasing)
+                    ) + fadeIn(animationSpec = navAlphaTween()),
                     exit = slideOutVertically(
                         targetOffsetY = { it },
-                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)),
+                        animationSpec = tween(NAV_DURATION, easing = LinearEasing)
+                    ) + fadeOut(animationSpec = navAlphaTween()),
                 ) {
-                    GhostNavigationBar(
+                    NextNavigationBar(
                         isSelected = { destination -> destination.route == currentRoute },
                         onDestinationClick = { destination -> selectTab(destination) },
-                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
             }
@@ -516,7 +505,6 @@ fun MainApp(
             navController = navController,
             startDestination = "home",
             modifier = Modifier
-                .nestedScroll(navBarScrollConnection)
                 .padding(
                     top = if (isTabRoute && !edgeToEdgeTop) innerPadding.calculateTopPadding() else 0.dp,
                     bottom = if (isTabRoute) innerPadding.calculateBottomPadding() else 0.dp,
