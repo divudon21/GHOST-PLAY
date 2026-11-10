@@ -116,7 +116,7 @@ import com.ghost.video.ui.screens.SubtitleSettingsScreen
 import com.ghost.video.ui.screens.ThumbnailSettingsScreen
 import com.ghost.video.ui.theme.AgonAppTheme
 import com.ghost.video.data.ThemePreference
-import com.ghost.video.data.AppPalette
+import com.ghost.video.data.AppColor
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
@@ -294,7 +294,7 @@ class MainActivity : ComponentActivity() {
             // waiting on the disk read.
             AgonAppTheme(
                 themePreference = startupTheme?.theme ?: ThemePreference.SYSTEM,
-                palette = startupTheme?.palette ?: AppPalette.MONOCHROME,
+                appColor = startupTheme?.appColor ?: AppColor.PURPLE,
                 textStyle = startupTheme?.textStyle ?: AppTextStyle.DEFAULT,
                 boldText = startupTheme?.boldText ?: false,
                 highContrastDark = startupTheme?.highContrastDark ?: false,
