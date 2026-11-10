@@ -108,4 +108,21 @@
     <string name="updates_popup">Show pop-up</string>
     <string name="updates_popup_desc">Show available updates when the app opens</string>
     <string name="updates_footer_note">Automatic checks run when the app opens. Notifications require Android notification permission.</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_music">Music</string>
+    <string name="nav_settings">Settings</string>
+    <string name="search_title">Search</string>
+    <string name="search_videos">Search videos…</string>
+    <string name="clear_search">Clear search</string>
+    <string name="recent_searches">Recent searches</string>
+    <string name="clear_all">Clear all</string>
+    <string name="search_empty_title">Search your videos</string>
+    <string name="search_empty_subtitle">Find any video on this device by name, or paste a video link to play it.</string>
+    <string name="search_permission_title">Storage permission required</string>
+    <string name="search_permission_subtitle">Allow access to your videos so they can be searched.</string>
+    <string name="no_videos_found">No videos found</string>
+    <string name="no_results_for">Nothing matches “%1$s”.</string>
+    <string name="play_this_link">Play this link</string>
+    <string name="play">Play</string>
 </resources>
