@@ -5,24 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.BatterySaver
-import androidx.compose.material.icons.rounded.ClosedCaption
-import androidx.compose.material.icons.rounded.Gesture
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.SystemUpdate
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,18 +22,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ThemePreference
+import com.ghost.video.ui.components.ClickablePreferenceItem
+import com.ghost.video.ui.components.NextIcons
+import com.ghost.video.ui.components.NextTopAppBar
 import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
 
 /**
- * Settings list, styled after NextPlayer's settings screen
- * (https://github.com/anilbeesetti/nextplayer): a top app bar with a tonal
- * back button and title, followed by segmented card rows — leading icon,
- * bold title and a smaller description, with no trailing chevron. Each row
- * is its own rounded card separated by a small gap, instead of the old
- * divider-separated list.
+ * Settings list, ported from NextPlayer (GPL-3.0):
+ * https://github.com/anilbeesetti/nextplayer/blob/main/feature/settings/src/main/java/dev/anilbeesetti/nextplayer/settings/SettingsScreen.kt
+ *
+ * Same structure as NextPlayer: a [NextTopAppBar] with a tonal back button
+ * and title, then segmented preference cards ([ClickablePreferenceItem])
+ * separated by [ListItemDefaults.SegmentedGap] on a surfaceContainer
+ * background. Ghost keeps its own categories and navigation callbacks; the
+ * TV focus modifiers from NextPlayer are omitted (no-op on touch devices).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
@@ -73,62 +68,61 @@ fun SettingsScreen(
         SettingsCategory(
             title = "Appearance",
             subtitle = "Adjust the app to your liking",
-            icon = Icons.Rounded.Palette,
+            icon = NextIcons.Appearance,
             onClick = onNavigateToAppearance
         ),
         SettingsCategory(
             title = "Player",
             subtitle = "Player appearance, playback controls",
-            icon = Icons.Rounded.PlayCircle,
+            icon = NextIcons.Player,
             onClick = onNavigateToPlayer
         ),
         SettingsCategory(
             title = "Gestures",
             subtitle = "Configure player touch gestures",
-            icon = Icons.Rounded.Gesture,
+            icon = NextIcons.SwipeHorizontal,
             onClick = onNavigateToGestures
         ),
         SettingsCategory(
             title = "Decoder",
             subtitle = "Decoder priority, playback decoder options",
-            icon = Icons.Rounded.Memory,
+            icon = NextIcons.Decoder,
             onClick = onNavigateToDecoder
         ),
         SettingsCategory(
             title = "Audio",
             subtitle = "Audio playback options",
-            icon = Icons.Rounded.Audiotrack,
+            icon = NextIcons.Audio,
             onClick = onNavigateToAudio
         ),
         SettingsCategory(
             title = "Subtitle",
             subtitle = "Subtitle appearance, playback options",
-            icon = Icons.Rounded.ClosedCaption,
+            icon = NextIcons.Subtitle,
             onClick = onNavigateToSubtitle
         ),
         SettingsCategory(
             title = "Thumbnail generation",
             subtitle = strategyLabel,
-            icon = Icons.Rounded.Image,
-            onClick = onNavigateToThumbnail,
-            highlightSubtitle = true
+            icon = NextIcons.Image,
+            onClick = onNavigateToThumbnail
         ),
         SettingsCategory(
             title = "General",
             subtitle = "User data options",
-            icon = Icons.Rounded.Tune,
+            icon = NextIcons.ExtraSettings,
             onClick = onNavigateToGeneral
         ),
         SettingsCategory(
             title = "Battery saver",
             subtitle = "Reduce power usage",
-            icon = Icons.Rounded.BatterySaver,
+            icon = androidx.compose.material.icons.Icons.Rounded.BatterySaver,
             onClick = onNavigateToBatterySaver
         ),
         SettingsCategory(
             title = "App update",
             subtitle = "Check for new versions",
-            icon = Icons.Rounded.SystemUpdate,
+            icon = NextIcons.Update,
             onClick = onNavigateToAppUpdate
         )
     )
@@ -139,98 +133,42 @@ fun SettingsScreen(
         // insets, so tell this inner Scaffold not to add them a second time
         // (otherwise the list gets an extra gap under the title and at the bottom).
         contentWindowInsets = WindowInsets(0.dp),
-        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+            NextTopAppBar(
+                title = "Settings",
+                fontWeight = FontWeight.Bold,
                 navigationIcon = {
                     FilledTonalIconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            imageVector = NextIcons.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
             )
-        }
-    ) { padding ->
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(state = rememberScrollState())
-                .padding(padding)
+                .padding(paddingValues = innerPadding)
                 .padding(horizontal = 16.dp)
                 .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
-            categories.forEach { category ->
-                SettingsCategoryCard(
-                    title = category.title,
-                    subtitle = category.subtitle,
-                    icon = category.icon,
-                    onClick = category.onClick,
-                    highlightSubtitle = category.highlightSubtitle
-                )
-            }
-        }
-    }
-}
-
-/**
- * One segmented settings row: a rounded card with a leading icon, a bold
- * title and a smaller description underneath. No trailing chevron, matching
- * NextPlayer's preference items.
- */
-@Composable
-fun SettingsCategoryCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    highlightSubtitle: Boolean = false
-) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (highlightSubtitle) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (highlightSubtitle) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            categories.forEachIndexed { index, category ->
+                key(category.title) {
+                    ClickablePreferenceItem(
+                        title = category.title,
+                        description = category.subtitle,
+                        icon = category.icon,
+                        onClick = category.onClick,
+                        isFirstItem = index == 0,
+                        isLastItem = index == categories.lastIndex,
+                    )
+                }
             }
         }
     }

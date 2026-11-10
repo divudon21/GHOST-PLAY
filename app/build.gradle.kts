@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.video"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "2.9"
+        versionCode = 12
+        versionName = "3.0-beta"
     }
 
     signingConfigs {
@@ -63,8 +63,8 @@ android {
 
     configurations.all {
         resolutionStrategy.force(
-            "androidx.compose.material3:material3:1.4.0-alpha10",
-            "androidx.compose.material3:material3-android:1.4.0-alpha10"
+            "androidx.compose.material3:material3:1.5.0-alpha15",
+            "androidx.compose.material3:material3-android:1.5.0-alpha15"
         )
     }
 
@@ -85,8 +85,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.01.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material3:material3:1.4.0-alpha10")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha15")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
 
