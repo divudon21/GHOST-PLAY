@@ -21,6 +21,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Tags are needed to build the changelog link in the release notes.
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -84,12 +87,56 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # The in-app updater (ported from DownList) only trusts releases whose notes
+      # carry a validated metadata comment: package name, version and the SHA-256
+      # of the signing certificate. Building it here means every tagged release is
+      # automatically discoverable by installed apps.
+      - name: Prepare release notes (tag builds)
+        if: steps.build.outcome == 'success' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)
+          UNIVERSAL=output/app-universal-release.apk
+          test -f "$UNIVERSAL" || { echo '::error title=MissingAPK::Universal APK not found'; exit 1; }
+          BADGING=$("$AAPT" dump badging "$UNIVERSAL" | sed -n '1p')
+          VERSION_CODE=$(echo "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
+          VERSION_NAME=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          SIGNER=$("$APKSIGNER" verify --print-certs "$UNIVERSAL"             | sed -n 's/.*certificate SHA-256 digest: *//p' | sed -n '1p' | tr 'A-F' 'a-f')
+          echo "versionName=$VERSION_NAME versionCode=$VERSION_CODE signer=$SIGNER"
+          test -n "$VERSION_NAME" && test -n "$VERSION_CODE" || { echo '::error title=BadgingError::Could not read version'; exit 1; }
+          echo "$SIGNER" | grep -Eq '^[a-f0-9]{64}$' || { echo '::error title=SignerError::Unexpected signer digest'; exit 1; }
+          METADATA=$(VERSION_NAME="$VERSION_NAME" VERSION_CODE="$VERSION_CODE" SIGNER="$SIGNER" python3 -c 'import json,os; print(json.dumps({"packageName":"com.ghost.video","versionName":os.environ["VERSION_NAME"],"versionCode":int(os.environ["VERSION_CODE"]),"signerSha256":os.environ["SIGNER"]},separators=(",",":")))')
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | sed -n '1p' || true)
+          mkdir -p ci
+          cat <<EOF > ci/release_notes.md
+          ## Ghost Play ${VERSION_NAME}
+
+          Version code ${VERSION_CODE}.
+
+          <!-- ghost-play-update:${METADATA} -->
+
+          ### APKs
+
+          - **\`app-arm64-v8a-release.apk\`** *(Recommended)* — Modern 64-bit ARM devices.
+          - **\`app-armeabi-v7a-release.apk\`** — Older 32-bit ARM devices.
+          - **\`app-universal-release.apk\`** — Universal APK for all CPU architectures.
+
+          The app's built-in updater (Settings → Updates) reads the metadata above, so keep
+          these asset names unchanged.
+
+          EOF
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${GITHUB_REF_NAME}" >> ci/release_notes.md
+          fi
+          cat ci/release_notes.md
+
       - name: Attach APKs to release (tag builds)
         if: steps.build.outcome == 'success' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: output/*.apk
-          generate_release_notes: true
+          body_path: ci/release_notes.md
 
       # The integration that reads this repository cannot download Actions logs,
       # so a failed build publishes its tail to the `ci-log` branch instead.

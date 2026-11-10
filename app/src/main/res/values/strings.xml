@@ -88,4 +88,24 @@
     <string name="delete">Delete</string>
     <string name="reset">Reset</string>
     <string name="app_color">App colour</string>
+    <string name="updates">Updates</string>
+    <string name="updates_section_app_updates">App updates</string>
+    <string name="check_for_updates">Check for updates</string>
+    <string name="check_for_updates_description">Find the latest available version</string>
+    <string name="checking">Checking…</string>
+    <string name="updates_error_title">Could not check for updates</string>
+    <string name="updates_up_to_date">You’re up to date</string>
+    <string name="updates_available">Update available</string>
+    <string name="updates_update">Update</string>
+    <string name="updates_signing_key_warning">This release has a different signing key. Android may require uninstalling the current app first, which removes its local settings.</string>
+    <string name="updates_section_preferences">Preferences</string>
+    <string name="updates_auto_check">Auto check updates</string>
+    <string name="updates_auto_check_desc">Check when the app opens</string>
+    <string name="updates_notifications">Update notifications</string>
+    <string name="updates_notifications_desc">Notify when an update is found</string>
+    <string name="updates_include_beta">Beta updates</string>
+    <string name="updates_include_beta_desc">Include pre-release versions</string>
+    <string name="updates_popup">Show pop-up</string>
+    <string name="updates_popup_desc">Show available updates when the app opens</string>
+    <string name="updates_footer_note">Automatic checks run when the app opens. Notifications require Android notification permission.</string>
 </resources>

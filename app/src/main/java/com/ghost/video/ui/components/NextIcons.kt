@@ -167,6 +167,12 @@ object NextIcons {
     val Timer = Icons.Rounded.Timer
     val Title = Icons.Rounded.Title
     val Update = Icons.Rounded.Update
+    val Refresh = Icons.Rounded.Refresh
+    val Notifications = Icons.Rounded.Notifications
+    val Science = Icons.Rounded.Science
+    val OpenInNew = Icons.AutoMirrored.Rounded.OpenInNew
+    val Error = Icons.Rounded.ErrorOutline
+    val CheckCircle = Icons.Rounded.CheckCircle
     val Video = Icons.Rounded.Movie
     val VolumeUp = Icons.AutoMirrored.Rounded.VolumeUp
     val ButtonsPosition = Icons.Rounded.AppSettingsAlt

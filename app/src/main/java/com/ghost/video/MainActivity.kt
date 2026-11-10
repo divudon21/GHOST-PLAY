@@ -33,7 +33,9 @@ import com.ghost.video.R
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.getValue
@@ -43,6 +45,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
@@ -51,7 +56,8 @@ import com.ghost.video.viewmodel.AudioViewModel
 import com.ghost.video.ui.screens.AudioPlayerScreen
 import com.ghost.video.ui.screens.AudioScreen
 import com.ghost.video.ui.screens.AudioSettingsScreen
-import com.ghost.video.ui.screens.AppUpdateScreen
+import com.ghost.video.ui.screens.UpdatesScreen
+import com.ghost.video.viewmodel.UpdatesViewModel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -94,6 +100,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.IconButton
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
@@ -254,15 +261,12 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        // If the user previously enabled update notifications, make sure the daily
-        // background check is (re)scheduled after an app restart / reboot.
+        // Legacy per-URL keys are removed once so DataStore reads stay fast. Update
+        // checks are no longer scheduled through WorkManager: DownList's updater
+        // runs when the app opens instead (see the Updates gate in setContent).
         lifecycleScope.launch {
             val repo = com.ghost.video.data.SettingsRepository(applicationContext)
-            // Remove legacy per-URL keys once, so DataStore reads stay fast.
             repo.cleanupLegacyPerUrlKeys()
-            if (repo.updateNotifications.first()) {
-                com.ghost.video.data.UpdateWorker.schedule(applicationContext)
-            }
         }
 
         // Previously this gate blocked the first frame until DataStore returned
@@ -299,6 +303,8 @@ class MainActivity : ComponentActivity() {
                 boldText = startupTheme?.boldText ?: false,
                 highContrastDark = startupTheme?.highContrastDark ?: false
             ) {
+                val updatesViewModel: UpdatesViewModel = viewModel()
+                UpdatesGate(viewModel = updatesViewModel)
                 MainApp(
                     externalVideoUrl = pendingExternalUrl,
                     onExternalVideoConsumed = { pendingExternalUrl = null }
@@ -595,7 +601,7 @@ fun MainApp(
                     onNavigateToAudio = { navController.navigate("audio_settings") { launchSingleTop = true } },
                     onNavigateToSubtitle = { navController.navigate("subtitle_settings") { launchSingleTop = true } },
                     onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } },
-                    onNavigateToAppUpdate = { navController.navigate("app_update") { launchSingleTop = true } },
+                    onNavigateToUpdates = { navController.navigate("updates") { launchSingleTop = true } },
                     onSwipeNext = { swipeToAdjacentTab(1) },
                     onSwipePrevious = { swipeToAdjacentTab(-1) }
                 )
@@ -697,16 +703,13 @@ fun MainApp(
                 )
             }
             composable(
-                "app_update",
+                "updates",
                 enterTransition = { TAB_SLIDE_IN_RIGHT },
                 exitTransition = { TAB_SLIDE_OUT_LEFT },
                 popEnterTransition = { TAB_SLIDE_IN_LEFT },
                 popExitTransition = { TAB_SLIDE_OUT_RIGHT }
             ) {
-                AppUpdateScreen(
-                    onBack = { navController.popBackStack() },
-                    viewModel = sharedSettingsViewModel
-                )
+                UpdatesScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = "player/{url}",
@@ -738,5 +741,77 @@ internal fun normalizeRouteUrl(raw: String): String {
         URLDecoder.decode(raw, "UTF-8")
     } catch (_: Exception) {
         raw
+    }
+}
+
+/**
+ * DownList-style update gate: when the app opens (and when it comes back from the
+ * background after at least ten seconds) the newest release is looked up, a
+ * notification is posted at most once per build, and — if the user kept the
+ * "Show pop-up" preference on — an "Update available" dialog is shown.
+ */
+@Composable
+private fun UpdatesGate(viewModel: UpdatesViewModel) {
+    val state by viewModel.state.collectAsState()
+    var dialogRelease by remember { mutableStateOf<com.ghost.video.data.UpdateRelease?>(null) }
+
+    val showPopupIfWanted: (com.ghost.video.data.UpdateRelease?) -> Unit = { release ->
+        if (release != null && viewModel.state.value.popup && dialogRelease == null) {
+            dialogRelease = release
+        }
+    }
+
+    // Automatic check once the stored preferences are ready.
+    LaunchedEffect(state.ready) {
+        if (state.ready) viewModel.checkOnOpen(showPopupIfWanted)
+    }
+
+    // Re-check after a longer stay in the background, like DownList does.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        var pausedAt: Long? = null
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> pausedAt = System.currentTimeMillis()
+                Lifecycle.Event.ON_RESUME -> {
+                    val since = pausedAt
+                    pausedAt = null
+                    if (since != null && System.currentTimeMillis() - since >= 10_000L) {
+                        viewModel.checkOnOpen(showPopupIfWanted)
+                    }
+                }
+
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val release = dialogRelease
+    if (release != null) {
+        val compatible = state.installed?.let { release.isCompatibleWith(it) } ?: true
+        AlertDialog(
+            onDismissRequest = { dialogRelease = null },
+            title = { Text("Update available") },
+            text = {
+                Text(
+                    text = "${release.label} is available." + if (compatible) "" else
+                        "\n\nThis release has a different signing key. Android may require " +
+                        "uninstalling the current app first, which removes local settings.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        dialogRelease = null
+                        viewModel.openRelease(release)
+                    },
+                ) { Text("Update") }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogRelease = null }) { Text("Cancel") }
+            },
+        )
     }
 }

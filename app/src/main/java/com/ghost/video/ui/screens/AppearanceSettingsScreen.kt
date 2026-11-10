@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -195,13 +196,24 @@ private fun AppearanceSettingsScreenContent(
                     )
                 }
 
+                // The high contrast variant only exists for the dark scheme, so the
+                // switch is disabled (and shown as off) while the app is in light mode
+                // instead of letting it be toggled with no visible effect.
+                val themeIsDark = when (state.themePreference) {
+                    ThemePreference.DARK -> true
+                    ThemePreference.LIGHT -> false
+                    ThemePreference.SYSTEM -> isSystemInDarkTheme()
+                }
                 PreferenceSwitch(
                     title = stringResource(R.string.high_contrast_dark_theme),
                     description = stringResource(R.string.high_contrast_dark_theme_desc),
                     icon = NextIcons.Contrast,
-                    isChecked = state.useHighContrastDarkTheme,
+                    enabled = themeIsDark,
+                    isChecked = themeIsDark && state.useHighContrastDarkTheme,
                     onClick = {
-                        onAction(AppearanceSettingsEvent.ToggleUseHighContrastDarkTheme)
+                        if (themeIsDark) {
+                            onAction(AppearanceSettingsEvent.ToggleUseHighContrastDarkTheme)
+                        }
                     },
                     isLastItem = true,
                 )

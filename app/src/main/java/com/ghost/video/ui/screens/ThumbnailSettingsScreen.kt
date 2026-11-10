@@ -1,11 +1,11 @@
 package com.ghost.video.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -17,17 +17,22 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.ThumbnailStrategy
+import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
+import com.ghost.video.ui.components.PreferenceItem
 import com.ghost.video.ui.components.PreferenceSlider
-import com.ghost.video.ui.components.SingleSelectablePreference
+import com.ghost.video.ui.components.RadioTextButton
 import com.ghost.video.viewmodel.SettingsViewModel
 
 /**
@@ -47,6 +52,7 @@ fun ThumbnailSettingsScreen(
 ) {
     val currentStrategy by viewModel.thumbnailStrategy.collectAsState()
     val currentPosition by viewModel.thumbnailPositionPercent.collectAsState()
+    var strategyExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -73,42 +79,32 @@ fun ThumbnailSettingsScreen(
         ) {
             ListSectionTitle(text = stringResource(id = R.string.thumbnail_generation_strategy))
 
-            Column(
-                modifier = Modifier.selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-            ) {
-                SingleSelectablePreference(
-                    title = stringResource(id = R.string.first_frame),
-                    description = stringResource(id = R.string.first_frame_desc),
-                    selected = currentStrategy == ThumbnailStrategy.FIRST_FRAME,
-                    onClick = {
-                        if (currentStrategy != ThumbnailStrategy.FIRST_FRAME) {
-                            viewModel.setThumbnailStrategy(ThumbnailStrategy.FIRST_FRAME)
-                        }
-                    },
-                    isFirstItem = true,
-                )
-                SingleSelectablePreference(
-                    title = stringResource(id = R.string.frame_at_position),
-                    description = stringResource(id = R.string.frame_at_position_desc),
-                    selected = currentStrategy == ThumbnailStrategy.FRAME_AT_POSITION,
-                    onClick = {
-                        if (currentStrategy != ThumbnailStrategy.FRAME_AT_POSITION) {
-                            viewModel.setThumbnailStrategy(ThumbnailStrategy.FRAME_AT_POSITION)
-                        }
-                    },
-                )
-                SingleSelectablePreference(
-                    title = stringResource(id = R.string.hybrid),
-                    description = stringResource(id = R.string.hybrid_desc),
-                    selected = currentStrategy == ThumbnailStrategy.HYBRID,
-                    onClick = {
-                        if (currentStrategy != ThumbnailStrategy.HYBRID) {
-                            viewModel.setThumbnailStrategy(ThumbnailStrategy.HYBRID)
-                        }
-                    },
-                    isLastItem = true,
-                )
+            // The strategy is picked from a single row that unfolds its options
+            // inline, matching the decoder / orientation / subtitle font rows.
+            PreferenceItem(
+                title = stringResource(id = R.string.thumbnail_generation_strategy),
+                description = currentStrategy.label(),
+                icon = NextIcons.Image,
+                enabled = true,
+                onClick = { strategyExpanded = !strategyExpanded },
+                isFirstItem = true,
+                isLastItem = true,
+            )
+
+            AnimatedVisibility(visible = strategyExpanded) {
+                InlineOptionGroup {
+                    ThumbnailStrategy.entries.forEach { strategy ->
+                        RadioTextButton(
+                            text = strategy.label(),
+                            description = strategy.description(),
+                            selected = strategy == currentStrategy,
+                            onClick = {
+                                viewModel.setThumbnailStrategy(strategy)
+                                strategyExpanded = false
+                            },
+                        )
+                    }
+                }
             }
 
             PreferenceSlider(
@@ -129,3 +125,21 @@ fun ThumbnailSettingsScreen(
         }
     }
 }
+
+@Composable
+private fun ThumbnailStrategy.label(): String = stringResource(
+    id = when (this) {
+        ThumbnailStrategy.FIRST_FRAME -> R.string.first_frame
+        ThumbnailStrategy.FRAME_AT_POSITION -> R.string.frame_at_position
+        ThumbnailStrategy.HYBRID -> R.string.hybrid
+    },
+)
+
+@Composable
+private fun ThumbnailStrategy.description(): String = stringResource(
+    id = when (this) {
+        ThumbnailStrategy.FIRST_FRAME -> R.string.first_frame_desc
+        ThumbnailStrategy.FRAME_AT_POSITION -> R.string.frame_at_position_desc
+        ThumbnailStrategy.HYBRID -> R.string.hybrid_desc
+    },
+)

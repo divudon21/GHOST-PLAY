@@ -1,11 +1,14 @@
 package com.ghost.video.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +27,7 @@ fun RadioTextButton(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    description: String? = null,
 ) {
     Row(
         modifier = modifier
@@ -41,6 +45,15 @@ fun RadioTextButton(
             onClick = null,
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = text)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = text)
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
