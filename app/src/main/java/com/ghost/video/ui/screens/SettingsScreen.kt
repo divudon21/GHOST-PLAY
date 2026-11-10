@@ -7,7 +7,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -51,7 +50,6 @@ fun SettingsScreen(
     onNavigateToAudio: () -> Unit = {},
     onNavigateToSubtitle: () -> Unit = {},
     onNavigateToGeneral: () -> Unit = {},
-    onNavigateToBatterySaver: () -> Unit = {},
     onNavigateToAppUpdate: () -> Unit = {},
     onSwipeNext: () -> Unit = {},
     onSwipePrevious: () -> Unit = {}
@@ -112,12 +110,6 @@ fun SettingsScreen(
             subtitle = "User data options",
             icon = NextIcons.ExtraSettings,
             onClick = onNavigateToGeneral
-        ),
-        SettingsCategory(
-            title = "Battery saver",
-            subtitle = "Reduce power usage",
-            icon = androidx.compose.material.icons.Icons.Rounded.BatterySaver,
-            onClick = onNavigateToBatterySaver
         ),
         SettingsCategory(
             title = "App update",

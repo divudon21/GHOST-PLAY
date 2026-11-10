@@ -130,9 +130,6 @@ fun HomeScreen(
     // flow collectors and caused scroll/tap jitter.
     val thumbnailStrategy by settingsViewModel.thumbnailStrategy.collectAsState()
     val thumbnailPositionPercent by settingsViewModel.thumbnailPositionPercent.collectAsState()
-    // Battery saver skips thumbnail decoding (the most power-hungry work on this
-    // screen) and shows a lightweight placeholder instead.
-    val batterySaver by settingsViewModel.batterySaver.collectAsState()
     val loadingIndicatorStyle by settingsViewModel.loadingIndicatorStyle.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -397,7 +394,6 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
-                                batterySaver = batterySaver,
                                 loadingIndicatorStyle = loadingIndicatorStyle,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
@@ -416,7 +412,6 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
-                                batterySaver = batterySaver,
                                 loadingIndicatorStyle = loadingIndicatorStyle,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
@@ -437,7 +432,6 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
-                                batterySaver = batterySaver,
                                 loadingIndicatorStyle = loadingIndicatorStyle,
                                 compact = true,
                                 onClick = { onPlayUrl(video.uri) },
@@ -461,7 +455,6 @@ fun HomeScreen(
                                     video = video,
                                     strategy = thumbnailStrategy,
                                     positionPercent = thumbnailPositionPercent,
-                                    batterySaver = batterySaver,
                                     loadingIndicatorStyle = loadingIndicatorStyle,
                                     onClick = { onPlayUrl(video.uri) },
                                     onChanged = reload
@@ -473,7 +466,6 @@ fun HomeScreen(
                                 video = video,
                                 strategy = thumbnailStrategy,
                                 positionPercent = thumbnailPositionPercent,
-                                batterySaver = batterySaver,
                                 loadingIndicatorStyle = loadingIndicatorStyle,
                                 onClick = { onPlayUrl(video.uri) },
                                 onChanged = reload
@@ -492,7 +484,6 @@ fun VideoThumbnailCard(
     video: LocalVideo,
     strategy: ThumbnailStrategy,
     positionPercent: Int,
-    batterySaver: Boolean,
     loadingIndicatorStyle: com.ghost.video.data.LoadingIndicatorStyle,
     compact: Boolean = false,
     onClick: () -> Unit,
@@ -504,13 +495,13 @@ fun VideoThumbnailCard(
     val cacheKey = "video:${video.uri}:$strategy:$positionPercent"
     val cached = remember(cacheKey) { com.ghost.video.data.ThumbnailCache.get(cacheKey) }
     var thumbnailBitmap by remember(cacheKey) { mutableStateOf(cached) }
-    var isLoading by remember(cacheKey, batterySaver) { mutableStateOf(cached == null && !batterySaver) }
+    var isLoading by remember(cacheKey) { mutableStateOf(cached == null) }
     var menuExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(cacheKey, batterySaver) {
+    LaunchedEffect(cacheKey) {
         // The bounded pipeline starts with currently composed (visible) cards,
         // delivers a quick preview first, then crossfades to the final frame.
-        if (cached == null && !batterySaver) {
+        if (cached == null) {
             isLoading = true
             VideoThumbnailPipeline.load(
                 context = context,
@@ -654,7 +645,6 @@ fun VideoListItem(
     video: LocalVideo,
     strategy: ThumbnailStrategy,
     positionPercent: Int,
-    batterySaver: Boolean,
     loadingIndicatorStyle: com.ghost.video.data.LoadingIndicatorStyle,
     onClick: () -> Unit,
     onChanged: () -> Unit
@@ -663,13 +653,13 @@ fun VideoListItem(
     val cacheKey = "video:${video.uri}:$strategy:$positionPercent"
     val cached = remember(cacheKey) { com.ghost.video.data.ThumbnailCache.get(cacheKey) }
     var thumbnailBitmap by remember(cacheKey) { mutableStateOf(cached) }
-    var isLoading by remember(cacheKey, batterySaver) { mutableStateOf(cached == null && !batterySaver) }
+    var isLoading by remember(cacheKey) { mutableStateOf(cached == null) }
     var menuExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(cacheKey, batterySaver) {
+    LaunchedEffect(cacheKey) {
         // The bounded pipeline starts with currently composed (visible) cards,
         // delivers a quick preview first, then crossfades to the final frame.
-        if (cached == null && !batterySaver) {
+        if (cached == null) {
             isLoading = true
             VideoThumbnailPipeline.load(
                 context = context,

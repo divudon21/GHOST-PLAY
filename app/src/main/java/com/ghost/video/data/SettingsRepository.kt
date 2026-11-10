@@ -112,7 +112,6 @@ class SettingsRepository(private val context: Context) {
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
     private val GLOW_EFFECT_KEY = booleanPreferencesKey("glow_effect")
-    private val BATTERY_SAVER_KEY = booleanPreferencesKey("battery_saver")
     private val UPDATE_NOTIFICATIONS_KEY = booleanPreferencesKey("update_notifications")
     private val LAST_SEEN_RELEASE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_seen_release")
     private val LOADING_INDICATOR_STYLE_KEY = intPreferencesKey("loading_indicator_style")
@@ -287,9 +286,6 @@ class SettingsRepository(private val context: Context) {
     val glowEffect: Flow<Boolean> = context.dataStore.data
         .map { it[GLOW_EFFECT_KEY] ?: false }
 
-    val batterySaver: Flow<Boolean> = context.dataStore.data
-        .map { it[BATTERY_SAVER_KEY] ?: false }
-
     val updateNotifications: Flow<Boolean> = context.dataStore.data
         .map { it[UPDATE_NOTIFICATIONS_KEY] ?: false }
 
@@ -457,10 +453,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setGlowEffect(enabled: Boolean) {
         context.dataStore.edit { it[GLOW_EFFECT_KEY] = enabled }
-    }
-
-    suspend fun setBatterySaver(enabled: Boolean) {
-        context.dataStore.edit { it[BATTERY_SAVER_KEY] = enabled }
     }
 
     suspend fun setUpdateNotifications(enabled: Boolean) {

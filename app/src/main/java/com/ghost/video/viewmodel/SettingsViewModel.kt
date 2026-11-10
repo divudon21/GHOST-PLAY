@@ -284,13 +284,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
-    val batterySaver: StateFlow<Boolean> = repository.batterySaver
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = false
-        )
-
     val updateNotifications: StateFlow<Boolean> = repository.updateNotifications
         .stateIn(
             scope = viewModelScope,
@@ -445,10 +438,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setGlowEffect(enabled: Boolean) {
         viewModelScope.launch { repository.setGlowEffect(enabled) }
-    }
-
-    fun setBatterySaver(enabled: Boolean) {
-        viewModelScope.launch { repository.setBatterySaver(enabled) }
     }
 
     fun setUpdateNotifications(enabled: Boolean) {
