@@ -23,17 +23,25 @@ implementation instead of a re-drawn approximation.
     extracted verbatim into `FloatingTabBarScroll.kt`; the rest of that file (the
     older, non-folding bar) is not used by Ghost.
 
-## NextPlayer (settings list UI design)
+## NextPlayer (settings UI, ported)
 
 - Source: https://github.com/anilbeesetti/nextplayer
 - Copyright (C) Anil Beesetti
 - License: GPL-3.0
-- The Settings list UI — top app bar with a tonal back button and title,
-  followed by segmented card rows (leading icon, bold title, smaller
-  description, no trailing chevron) — is adapted from NextPlayer's
-  `SettingsScreen` / `PreferenceItem` design. Ghost Play's implementation
-  (`ui/screens/SettingsScreen.kt`) is written against Ghost's own theme and
-  navigation; no NextPlayer source files are vendored verbatim.
+- Ghost Play's Settings screen is a port of NextPlayer's settings UI:
+  - `ui/screens/SettingsScreen.kt` — from NextPlayer's `SettingsScreen`
+    (top app bar + segmented preference list on surfaceContainer);
+  - `ui/components/NextSegmentedListItem.kt` — from NextPlayer's
+    `ListItemComponent.kt` (`NextSegmentedListItem`, `ListSectionTitle`);
+  - `ui/components/PreferenceItem.kt` — from NextPlayer's `PreferenceItem.kt`
+    and `ClickablePreferenceItem.kt`;
+  - `ui/components/NextTopAppBar.kt` — from NextPlayer's `TopAppBar.kt`;
+  - `ui/components/NextIcons.kt` — from NextPlayer's `NextIcons.kt`.
+  Package names were changed to `com.ghost.video.*`, Ghost's own categories
+  and navigation callbacks are used instead of NextPlayer's, and the
+  Android-TV focus modifiers (no-op on touch devices) were omitted. The
+  Material3 version was aligned to NextPlayer's (1.5.0-alpha15) so the
+  Expressive `SegmentedListItem` APIs compile unchanged.
 
 ## FloatingTabBar v1.0.1 (compose-floating-tab-bar)
 
