@@ -127,8 +127,9 @@ import com.ghost.video.data.AppColor
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.ui.screens.HomeScreen
 import com.ghost.video.viewmodel.SettingsViewModel
-import com.ghost.video.navigation.convx.GhostConvxNavigationBar
-import com.ghost.video.navigation.convx.GhostNavTab
+import com.ghost.video.navigation.GhostNavigationBar
+import com.ghost.video.navigation.GhostTopLevelDestination
+import com.ghost.video.ui.screens.SearchScreen
 import com.ghost.video.navigation.convx.floatingtabbar.FloatingTabBarInlineBehavior
 import com.ghost.video.navigation.convx.floatingtabbar.rememberFloatingTabBarScrollConnection
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -330,7 +331,7 @@ fun MainApp(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val showBottomNavRoutes = listOf("home", "audio", "settings")
+    val showBottomNavRoutes = GhostTopLevelDestination.entries.map { it.route }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Convx's folding bar collapses to the selected tab while the content scrolls
@@ -340,13 +341,10 @@ fun MainApp(
     )
     LaunchedEffect(currentRoute) { navBarScrollConnection.expand() }
 
-    fun selectTab(tab: GhostNavTab) {
-        if (currentRoute == tab.route) {
-            navBarScrollConnection.expand()
-            return
-        }
-        navController.navigate(tab.route) {
-            popUpTo("home")
+    fun selectTab(destination: GhostTopLevelDestination) {
+        if (currentRoute == destination.route) return
+        navController.navigate(destination.route) {
+            popUpTo("home") { saveState = false }
             launchSingleTop = true
         }
     }
@@ -493,15 +491,10 @@ fun MainApp(
                         animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
                     ) + fadeOut(animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)),
                 ) {
-                    GhostConvxNavigationBar(
-                        selectedRoute = currentRoute,
-                        onTabSelected = { tab -> selectTab(tab) },
-                        scrollConnection = navBarScrollConnection,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 16.dp)
-                            .padding(top = 8.dp, bottom = 12.dp)
+                    GhostNavigationBar(
+                        isSelected = { destination -> destination.route == currentRoute },
+                        onDestinationClick = { destination -> selectTab(destination) },
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
             }
@@ -516,7 +509,8 @@ fun MainApp(
         // bar / notch area with the screen background and the shared top app bar
         // applies the status bar inset itself. Without this the notch strip stayed
         // bare above those screens.
-        val edgeToEdgeTop = currentRoute == "settings" || currentRoute == "home" || currentRoute == "audio"
+        val edgeToEdgeTop = currentRoute == "settings" || currentRoute == "home" ||
+            currentRoute == "audio" || currentRoute == "search"
         val layoutDirection = LocalLayoutDirection.current
         NavHost(
             navController = navController,
@@ -538,6 +532,28 @@ fun MainApp(
                 popExitTransition = { TAB_EXIT }
             ) {
                 HomeScreen(
+                    onPlayUrl = { url ->
+                        val encodedUrl = URLEncoder.encode(url, "UTF-8")
+                        navController.navigate("player/$encodedUrl")
+                    },
+                    onNavigateToSearch = {
+                        navController.navigate("search") {
+                            popUpTo("home") { saveState = false }
+                            launchSingleTop = true
+                        }
+                    },
+                    onSwipeNext = { swipeToAdjacentTab(1) },
+                    onSwipePrevious = { swipeToAdjacentTab(-1) }
+                )
+            }
+            composable(
+                "search",
+                enterTransition = { TAB_ENTER },
+                exitTransition = { TAB_EXIT },
+                popEnterTransition = { TAB_ENTER },
+                popExitTransition = { TAB_EXIT }
+            ) {
+                SearchScreen(
                     onPlayUrl = { url ->
                         val encodedUrl = URLEncoder.encode(url, "UTF-8")
                         navController.navigate("player/$encodedUrl")

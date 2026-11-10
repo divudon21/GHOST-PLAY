@@ -106,6 +106,7 @@ private var cachedVideos: List<LocalVideo>? = null
 @Composable
 fun HomeScreen(
     onPlayUrl: (String) -> Unit,
+    onNavigateToSearch: () -> Unit = {},
     settingsViewModel: SettingsViewModel = viewModel(),
     onSwipeNext: () -> Unit = {},
     onSwipePrevious: () -> Unit = {}
@@ -115,8 +116,6 @@ fun HomeScreen(
     // when the destination leaves composition.
     var url by rememberSaveable { mutableStateOf("") }
     var showUrlInput by rememberSaveable { mutableStateOf(false) }
-    var showSearch by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current
@@ -179,10 +178,7 @@ fun HomeScreen(
 
     // Search filtering is memoized: it only recomputes when the query or the
     // video list actually changes, so typing is smooth and cheap.
-    val filteredVideos = remember(localVideos, searchQuery) {
-        if (searchQuery.isBlank()) localVideos
-        else localVideos.filter { it.name.contains(searchQuery.trim(), ignoreCase = true) }
-    }
+    val filteredVideos = localVideos
 
     fun openAppSettings() {
         val intent = Intent(
@@ -226,13 +222,10 @@ fun HomeScreen(
                 actions = {
                     FilledTonalIconButton(
                         onClick = {
-                            if (showSearch) {
-                                showSearch = false
-                                focusManager.clearFocus()
-                            } else {
-                                showSearch = true
-                                showUrlInput = false
-                            }
+                            // The top-bar magnifier opens the Search tab so there is a
+                            // single search experience instead of an inline field.
+                            focusManager.clearFocus()
+                            onNavigateToSearch()
                         }
                     ) {
                         Icon(
@@ -249,7 +242,6 @@ fun HomeScreen(
                                 focusManager.clearFocus()
                             } else {
                                 showUrlInput = true
-                                showSearch = false
                             }
                         }
                     ) {
@@ -269,33 +261,6 @@ fun HomeScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-        AnimatedVisibility(
-            visible = showSearch,
-            enter = fadeIn(animationSpec = tween(260)) + expandVertically(animationSpec = tween(260)),
-            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search videos…") },
-                leadingIcon = {
-                    Icon(painterResource(id = R.drawable.ic_search), contentDescription = null)
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp, bottom = 4.dp)
-            )
-        }
-        
         AnimatedVisibility(
             visible = showUrlInput,
             enter = fadeIn(animationSpec = tween(260)) + expandVertically(animationSpec = tween(260)),
