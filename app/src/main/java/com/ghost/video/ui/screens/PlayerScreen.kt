@@ -71,6 +71,7 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
@@ -562,6 +563,34 @@ fun PlayerScreen(url: String) {
     // Get dialog colors based on preference
     val dialogColors = rememberDialogColors(dialogThemePreference, appColor, themePreference)
     
+    // Subtitle styling used to be applied only once, when the PlayerView was
+    // first created, so preference changes ("System caption style", font, bold,
+    // size, background, embedded styles) never reached the running player.
+    // Re-apply on every change instead.
+    LaunchedEffect(
+        systemCaptionStyle,
+        subtitleFont,
+        subtitleBold,
+        subtitleBackground,
+        subtitleSize,
+        subtitleEmbeddedStyles,
+        playerViewRef,
+    ) {
+        val view = playerViewRef?.subtitleView ?: return@LaunchedEffect
+        applySubtitleStyle(
+            subtitleView = view,
+            context = context,
+            useSystemCaptionStyle = systemCaptionStyle,
+            font = subtitleFont,
+            bold = subtitleBold,
+            background = subtitleBackground,
+            textSize = subtitleSize,
+            embeddedStyles = subtitleEmbeddedStyles,
+        )
+        view.requestLayout()
+        view.invalidate()
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
@@ -591,45 +620,17 @@ fun PlayerScreen(url: String) {
                     setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     showController()
 
-                    subtitleView?.apply {
-                        if (systemCaptionStyle) {
-                            // Use the device's captioning settings from Android's
-                            // accessibility preferences.
-                            setUserDefaultStyle()
-                            setUserDefaultTextSize()
-                        } else {
-                            setApplyEmbeddedFontSizes(subtitleEmbeddedStyles)
-                            setApplyEmbeddedStyles(subtitleEmbeddedStyles)
-
-                            // Bundled variable fonts so each subtitle option is
-                            // visibly different from the system default.
-                            val typeface = when (subtitleFont) {
-                                SubtitleFont.DEFAULT -> Typeface.DEFAULT
-                                SubtitleFont.LORA -> ResourcesCompat.getFont(ctx, R.font.lora_variable)
-                                SubtitleFont.JETBRAINS_MONO -> ResourcesCompat.getFont(ctx, R.font.jetbrains_mono_variable)
-                                SubtitleFont.NUNITO -> ResourcesCompat.getFont(ctx, R.font.nunito_variable)
-                            }
-
-                            // Apply the user's Font, Bold and Background in BOTH
-                            // cases. Previously these were skipped when "Styled
-                            // Subtitles" was ON (the default), so the Font / Bold
-                            // / Size settings appeared to do nothing.
-                            val style = CaptionStyleCompat(
-                                android.graphics.Color.WHITE,
-                                if (subtitleBackground) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
-                                android.graphics.Color.TRANSPARENT,
-                                if (subtitleBold) CaptionStyleCompat.EDGE_TYPE_OUTLINE else CaptionStyleCompat.EDGE_TYPE_NONE,
-                                android.graphics.Color.BLACK,
-                                typeface
-                            )
-                            setStyle(style)
-
-                            // Fixed text size only when embedded styles are off;
-                            // otherwise the subtitle file's own sizes win.
-                            if (!subtitleEmbeddedStyles) {
-                                setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize.toFloat())
-                            }
-                        }
+                    subtitleView?.let { view ->
+                        applySubtitleStyle(
+                            subtitleView = view,
+                            context = ctx,
+                            useSystemCaptionStyle = systemCaptionStyle,
+                            font = subtitleFont,
+                            bold = subtitleBold,
+                            background = subtitleBackground,
+                            textSize = subtitleSize,
+                            embeddedStyles = subtitleEmbeddedStyles,
+                        )
                     }
                     systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or 
                                          View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or 
@@ -2075,3 +2076,58 @@ data class AspectRatioOption(
     val label: String,
     val value: Int
 )
+
+/**
+ * Applies the subtitle preferences to a media3 [SubtitleView].
+ *
+ * When [useSystemCaptionStyle] is enabled the style and text size come from the
+ * device's captioning preferences (`CaptioningManager`); otherwise the app's own
+ * font / bold / background / size settings are used.
+ */
+private fun applySubtitleStyle(
+    subtitleView: SubtitleView,
+    context: Context,
+    useSystemCaptionStyle: Boolean,
+    font: SubtitleFont,
+    bold: Boolean,
+    background: Boolean,
+    textSize: Int,
+    embeddedStyles: Boolean,
+) {
+    // Embedded styling only ever applies to the app-managed look; the system
+    // caption style must not be overridden by the subtitle file.
+    subtitleView.setApplyEmbeddedFontSizes(!useSystemCaptionStyle && embeddedStyles)
+    subtitleView.setApplyEmbeddedStyles(!useSystemCaptionStyle && embeddedStyles)
+
+    if (useSystemCaptionStyle) {
+        // Reads the style + text size configured in the system captioning
+        // preferences (Settings > Accessibility > Caption preferences).
+        subtitleView.setUserDefaultStyle()
+        subtitleView.setUserDefaultTextSize()
+        return
+    }
+
+    val typeface = when (font) {
+        SubtitleFont.DEFAULT -> Typeface.DEFAULT
+        SubtitleFont.LORA -> ResourcesCompat.getFont(context, R.font.lora_variable)
+        SubtitleFont.JETBRAINS_MONO ->
+            ResourcesCompat.getFont(context, R.font.jetbrains_mono_variable)
+        SubtitleFont.NUNITO -> ResourcesCompat.getFont(context, R.font.nunito_variable)
+    }
+
+    val style = CaptionStyleCompat(
+        android.graphics.Color.WHITE,
+        if (background) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT,
+        android.graphics.Color.TRANSPARENT,
+        if (bold) CaptionStyleCompat.EDGE_TYPE_OUTLINE else CaptionStyleCompat.EDGE_TYPE_NONE,
+        android.graphics.Color.BLACK,
+        typeface,
+    )
+    subtitleView.setStyle(style)
+
+    // Fixed text size only when embedded styles are off; otherwise the subtitle
+    // file's own sizes win.
+    if (!embeddedStyles) {
+        subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, textSize.toFloat())
+    }
+}

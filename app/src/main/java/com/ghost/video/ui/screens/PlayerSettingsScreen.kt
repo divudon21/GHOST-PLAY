@@ -1,10 +1,10 @@
 package com.ghost.video.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,11 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.OrientationPreference
-import com.ghost.video.ui.components.ClickablePreferenceItem
+import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
-import com.ghost.video.ui.components.OptionsDialog
+import com.ghost.video.ui.components.PreferenceItem
 import com.ghost.video.ui.components.PreferenceSlider
 import com.ghost.video.ui.components.PreferenceSwitch
 import com.ghost.video.ui.components.RadioTextButton
@@ -62,7 +62,7 @@ fun PlayerSettingsScreen(
     val rememberSelections by viewModel.rememberSelections.collectAsState()
     val orientation by viewModel.playerOrientation.collectAsState()
 
-    var showOrientationDialog by remember { mutableStateOf(false) }
+    var orientationExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -91,14 +91,30 @@ fun PlayerSettingsScreen(
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                ClickablePreferenceItem(
+                PreferenceItem(
                     title = stringResource(id = R.string.player_screen_orientation),
                     description = orientation.label(),
                     icon = NextIcons.Rotation,
-                    onClick = { showOrientationDialog = true },
+                    enabled = true,
+                    onClick = { orientationExpanded = !orientationExpanded },
                     isFirstItem = true,
                     isLastItem = true,
                 )
+
+                AnimatedVisibility(visible = orientationExpanded) {
+                    InlineOptionGroup {
+                        OrientationPreference.entries.forEach { option ->
+                            RadioTextButton(
+                                text = option.label(),
+                                selected = option == orientation,
+                                onClick = {
+                                    viewModel.setPlayerOrientation(option)
+                                    orientationExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
             }
 
             ListSectionTitle(text = stringResource(id = R.string.playback))
@@ -175,24 +191,6 @@ fun PlayerSettingsScreen(
                     isChecked = rememberSelections,
                     onClick = { viewModel.setRememberSelections(!rememberSelections) },
                     isLastItem = true,
-                )
-            }
-        }
-    }
-
-    if (showOrientationDialog) {
-        OptionsDialog(
-            text = stringResource(id = R.string.player_screen_orientation),
-            onDismissClick = { showOrientationDialog = false },
-        ) {
-            items(OrientationPreference.entries.toTypedArray()) { option ->
-                RadioTextButton(
-                    text = option.label(),
-                    selected = option == orientation,
-                    onClick = {
-                        viewModel.setPlayerOrientation(option)
-                        showOrientationDialog = false
-                    },
                 )
             }
         }
