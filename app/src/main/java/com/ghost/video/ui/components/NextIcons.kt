@@ -92,6 +92,7 @@ import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Swipe
 import androidx.compose.material.icons.rounded.SwipeVertical
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Title
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Translate
@@ -171,6 +172,7 @@ object NextIcons {
     val Tap = Icons.Rounded.TouchApp
     val Timer = Icons.Rounded.Timer
     val Title = Icons.Rounded.Title
+    val TextFields = Icons.Rounded.TextFields
     val Update = Icons.Rounded.Update
     val Refresh = Icons.Rounded.Refresh
     val Notifications = Icons.Rounded.Notifications

@@ -51,3 +51,12 @@ implementation instead of a re-drawn approximation.
 ## Backdrop / LiquidBottomTabs
 
 - Adapted from Kyant0/AndroidLiquidGlass (Apache-2.0), as vendored by Convx.
+
+## Lato
+
+- Source: https://github.com/google/fonts/tree/main/ofl/lato
+- Copyright (C) 2010-2014 Łukasz Dziedzic
+- License: SIL Open Font License 1.1 (`assets/licenses/lato-OFL.txt`)
+- Vendored files: `app/src/main/res/font/lato_regular.ttf`,
+  `app/src/main/res/font/lato_bold.ttf` (used by the Appearance > App text
+  option, whose font list follows DownList's appearance settings).
