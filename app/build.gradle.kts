@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.video"
         minSdk = 24
         targetSdk = 36
-        versionCode = 27
-        versionName = "3.13"
+        versionCode = 28
+        versionName = "3.14"
     }
 
     signingConfigs {
@@ -118,6 +118,17 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
     implementation("androidx.media3:media3-exoplayer-rtsp:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
+    // Streaming protocols and containers that the core artifacts leave out:
+    // RTMP data source (rtmp:// live streams), SmoothStreaming manifests (.ism)
+    // and standard MIDI files. All are published next to the artifacts above and
+    // carry no extra native code, so they cannot affect decoding paths.
+    implementation("androidx.media3:media3-datasource-rtmp:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-smoothstreaming:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-midi:$media3Version")
+    // OkHttp-backed network stack for http(s) playback: HTTP/2, compressed
+    // responses and redirect handling that plain HttpURLConnection struggles
+    // with on many CDN/stream hosts. OkHttp itself is already in the APK (Coil).
+    implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
     implementation("androidx.media:media:1.7.0")
 
     // Software decoders (FFmpeg: H.264/HEVC/VP8/VP9/AV1 + every common audio codec)
