@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.OrientationPreference
+import com.ghost.video.ui.components.ExpandingPreferenceItem
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
@@ -91,28 +92,24 @@ fun PlayerSettingsScreen(
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                PreferenceItem(
+                ExpandingPreferenceItem(
                     title = stringResource(id = R.string.player_screen_orientation),
                     description = orientation.label(),
                     icon = NextIcons.Rotation,
-                    enabled = true,
-                    onClick = { orientationExpanded = !orientationExpanded },
+                    expanded = orientationExpanded,
+                    onToggle = { orientationExpanded = !orientationExpanded },
                     isFirstItem = true,
                     isLastItem = true,
-                )
-
-                AnimatedVisibility(visible = orientationExpanded) {
-                    InlineOptionGroup {
-                        OrientationPreference.entries.forEach { option ->
-                            RadioTextButton(
-                                text = option.label(),
-                                selected = option == orientation,
-                                onClick = {
-                                    viewModel.setPlayerOrientation(option)
-                                    orientationExpanded = false
-                                },
-                            )
-                        }
+                ) {
+                    OrientationPreference.entries.forEach { option ->
+                        RadioTextButton(
+                            text = option.label(),
+                            selected = option == orientation,
+                            onClick = {
+                                viewModel.setPlayerOrientation(option)
+                                orientationExpanded = false
+                            },
+                        )
                     }
                 }
             }
