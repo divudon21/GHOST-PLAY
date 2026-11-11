@@ -376,7 +376,7 @@ class MusicService : MediaSessionService() {
         val compactActions = compactActionIndices(hasSiblings = hasNext)
 
         val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
-            .setMediaSession(mediaSession?.sessionCompatToken)
+            .setMediaSession(mediaSession?.platformToken)
             .setShowActionsInCompactView(*compactActions)
             .setShowCancelButton(true)
             .setCancelButtonIntent(stopPendingIntent)
