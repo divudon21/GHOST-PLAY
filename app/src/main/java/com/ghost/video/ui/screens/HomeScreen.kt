@@ -227,28 +227,11 @@ fun HomeScreen(
         contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             NextTopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.app_logo),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                        Text(
-                            text = "Ghost Play",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                },
+                // The name alone. The mark beside it was the previous app's
+                // icon and is not this one's, so the header carries the app's
+                // name and nothing that could be mistaken for branding.
+                title = "Ghost Play",
+                fontWeight = FontWeight.Bold,
                 actions = {
                     FilledTonalIconButton(
                         onClick = {

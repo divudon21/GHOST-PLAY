@@ -156,4 +156,11 @@
     <string name="font_jetbrains_mono_desc">Distinctive monospace</string>
     <string name="font_manrope">Manrope</string>
     <string name="font_manrope_desc">Crisp, modern and easy to read</string>
+    <string name="about_name">About</string>
+    <string name="about_description">App version, credits and licences</string>
+    <string name="by">by %1$s</string>
+    <string name="app_developer">Ghost Play</string>
+    <string name="libraries">Libraries</string>
+    <string name="github">GitHub</string>
+    <string name="error_opening_link">Could not open the link</string>
 </resources>

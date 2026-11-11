@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -30,7 +31,23 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun tabBarClearance(): Dp =
-    NAV_BAR_HEIGHT + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    NAV_BAR_HEIGHT +
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+        if (LocalMiniPlayerVisible.current) MINI_PLAYER_CLEARANCE else 0.dp
+
+/**
+ * Whether the mini player is on screen.
+ *
+ * Provided by MainActivity, which is the only place that knows: playback
+ * outlives any one screen, so the pill is drawn over the pages rather than by
+ * them. While it is up it rides *on* the tab bar, and the last rows have to
+ * clear it as well as the bar — otherwise starting a track buried the end of
+ * every list a second time, by exactly one pill.
+ */
+val LocalMiniPlayerVisible = staticCompositionLocalOf { false }
+
+/** The pill's 56dp body plus the gap above it. */
+private val MINI_PLAYER_CLEARANCE = 64.dp
 
 /** The Material 3 navigation bar's own height, without any window inset. */
 private val NAV_BAR_HEIGHT = 80.dp

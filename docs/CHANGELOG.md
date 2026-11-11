@@ -5,6 +5,34 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.26 (beta)
+
+### About
+- **Settings → About**, ported from NextPlayer's about page: the rounded card
+  whose radial gradient drifts across it, this app's own icon and name with the
+  version under them, and the two buttons at the foot. The second opens Ghost
+  Play's source on GitHub.
+- **Settings → About → Libraries**, also NextPlayer's: one segmented row per
+  third-party project with its version, its authors and a badge per licence.
+  NextPlayer generates that list with `mikepenz.aboutlibraries` at build time;
+  this app declares the same entries by hand instead of adding a plugin and a
+  code-generated report for a screen that changes when a dependency does.
+- The About row sits last in Settings, after Updates — where NextPlayer puts it.
+
+### Fixes
+- **The end of a list is covered again while music plays.** The mini player
+  rides on the tab bar, so with a track playing the bottom of every list had
+  one more pill over it than the 3.25 clearance allowed for: exactly the bug
+  that release fixed, back by 64dp. `tabBarClearance()` now adds the pill's
+  height while it is up, read from a composition local that MainActivity
+  provides — it is the only scope that knows, because playback outlives any one
+  screen.
+
+### Interface
+- **Home's header is the app's name alone.** The mark beside it was the previous
+  app's icon; it is gone rather than swapped, since the launcher icon now says
+  what the app is.
+
 ## 3.25 (beta)
 
 ### Interface
