@@ -49,7 +49,8 @@ enum class AppColor(val seed: Long, val label: String) {
 
 enum class AppTextStyle {
     // Keep the original four entries first so existing stored ordinals remain valid.
-    MANROPE, NUNITO, LORA, JETBRAINS_MONO, DEFAULT, INTER, CABARET, GRAZING_MACE, ABRAHAM_STAMP
+    MANROPE, NUNITO, LORA, JETBRAINS_MONO, DEFAULT, INTER, CABARET, GRAZING_MACE, ABRAHAM_STAMP,
+    LATO
 }
 
 /** Critical appearance values loaded together before the first app frame. */

@@ -125,4 +125,17 @@
     <string name="no_results_for">Nothing matches “%1$s”.</string>
     <string name="play_this_link">Play this link</string>
     <string name="play">Play</string>
+    <string name="app_text">App text</string>
+    <string name="font_system_default">System default</string>
+    <string name="font_system_default_desc">Use your device’s default font</string>
+    <string name="font_inter">Inter</string>
+    <string name="font_inter_desc">Clean and modern</string>
+    <string name="font_nunito">Nunito</string>
+    <string name="font_nunito_desc">Soft and rounded</string>
+    <string name="font_lato">Lato</string>
+    <string name="font_lato_desc">Friendly and balanced</string>
+    <string name="font_jetbrains_mono">JetBrains Mono</string>
+    <string name="font_jetbrains_mono_desc">Distinctive monospace</string>
+    <string name="font_manrope">Manrope</string>
+    <string name="font_manrope_desc">Crisp, modern and easy to read</string>
 </resources>

@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -21,10 +23,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,10 +41,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.AppColor
+import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
@@ -50,6 +58,7 @@ import com.ghost.video.ui.components.PreferenceItem
 import com.ghost.video.ui.components.PreferenceSwitch
 import com.ghost.video.ui.components.PreferenceSwitchWithDivider
 import com.ghost.video.ui.components.RadioTextButton
+import com.ghost.video.ui.theme.appTextStyleFontFamily
 import com.ghost.video.viewmodel.SettingsViewModel
 
 /**
@@ -67,12 +76,14 @@ fun AppearanceSettingsScreen(
     val themePreference by viewModel.themePreference.collectAsState()
     val highContrastDark by viewModel.highContrastDark.collectAsState()
     val appColor by viewModel.appColor.collectAsState()
+    val appTextStyle by viewModel.appTextStyle.collectAsState()
 
     AppearanceSettingsScreenContent(
         state = AppearanceSettingsUiState(
             themePreference = themePreference,
             useHighContrastDarkTheme = highContrastDark,
             appColor = appColor,
+            appTextStyle = appTextStyle,
         ),
         onAction = { action ->
             when (action) {
@@ -87,6 +98,9 @@ fun AppearanceSettingsScreen(
 
                 is AppearanceSettingsEvent.UpdateAppColor ->
                     viewModel.setAppColor(action.appColor)
+
+                is AppearanceSettingsEvent.UpdateAppTextStyle ->
+                    viewModel.setAppTextStyle(action.textStyle)
 
                 is AppearanceSettingsEvent.ToggleUseHighContrastDarkTheme ->
                     viewModel.setHighContrastDark(!highContrastDark)
@@ -109,6 +123,7 @@ private fun AppearanceSettingsScreenContent(
     var expandedSection by remember { mutableStateOf<AppearanceSection?>(null) }
     val themeExpanded = expandedSection == AppearanceSection.Theme
     val colorExpanded = expandedSection == AppearanceSection.Color
+    val textExpanded = expandedSection == AppearanceSection.Text
 
     Scaffold(
         topBar = {
@@ -194,6 +209,33 @@ private fun AppearanceSettingsScreenContent(
                         selected = state.appColor,
                         onSelect = { onAction(AppearanceSettingsEvent.UpdateAppColor(it)) },
                     )
+                }
+
+                PreferenceItem(
+                    title = stringResource(id = R.string.app_text),
+                    description = state.appTextStyle.appName(),
+                    icon = NextIcons.TextFields,
+                    enabled = true,
+                    onClick = {
+                        expandedSection = if (textExpanded) null else AppearanceSection.Text
+                    },
+                )
+
+                AnimatedVisibility(visible = textExpanded) {
+                    InlineOptionGroup {
+                        AppTextStyleOptions.forEach { style ->
+                            AppTextOption(
+                                name = style.appName(),
+                                description = style.appDescription(),
+                                fontFamily = appTextStyleFontFamily(style),
+                                selected = style == state.appTextStyle,
+                                onClick = {
+                                    onAction(AppearanceSettingsEvent.UpdateAppTextStyle(style))
+                                    expandedSection = null
+                                },
+                            )
+                        }
+                    }
                 }
 
                 // The high contrast variant only exists for the dark scheme, so the
@@ -294,12 +336,13 @@ private fun ThemePreference.name(): String {
     return stringResource(id = stringRes)
 }
 
-private enum class AppearanceSection { Theme, Color }
+private enum class AppearanceSection { Theme, Color, Text }
 
 data class AppearanceSettingsUiState(
     val themePreference: ThemePreference = ThemePreference.SYSTEM,
     val useHighContrastDarkTheme: Boolean = false,
     val appColor: AppColor = AppColor.PURPLE,
+    val appTextStyle: AppTextStyle = AppTextStyle.DEFAULT,
 )
 
 sealed interface AppearanceSettingsEvent {
@@ -307,5 +350,80 @@ sealed interface AppearanceSettingsEvent {
     data object ToggleDarkTheme : AppearanceSettingsEvent
     data class UpdateThemeConfig(val themePreference: ThemePreference) : AppearanceSettingsEvent
     data class UpdateAppColor(val appColor: AppColor) : AppearanceSettingsEvent
+    data class UpdateAppTextStyle(val textStyle: AppTextStyle) : AppearanceSettingsEvent
     data object ToggleUseHighContrastDarkTheme : AppearanceSettingsEvent
 }
+
+/**
+ * The app text options in DownList's order, with DownList's copy. Each row is
+ * rendered in the font it selects so the choice is visible before picking it.
+ */
+private val AppTextStyleOptions = listOf(
+    AppTextStyle.DEFAULT,
+    AppTextStyle.INTER,
+    AppTextStyle.NUNITO,
+    AppTextStyle.LATO,
+    AppTextStyle.JETBRAINS_MONO,
+    AppTextStyle.MANROPE,
+)
+
+@Composable
+private fun AppTextOption(
+    name: String,
+    description: String,
+    fontFamily: FontFamily?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val nameStyle = if (fontFamily != null) TextStyle(fontFamily = fontFamily) else TextStyle.Default
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(
+                selected = selected,
+                onClick = onClick,
+                role = Role.RadioButton,
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Column(modifier = Modifier.padding(start = 8.dp)) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyLarge.merge(nameStyle),
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium.merge(nameStyle),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppTextStyle.appName(): String = stringResource(
+    id = when (this) {
+        AppTextStyle.DEFAULT -> R.string.font_system_default
+        AppTextStyle.INTER -> R.string.font_inter
+        AppTextStyle.NUNITO -> R.string.font_nunito
+        AppTextStyle.LATO -> R.string.font_lato
+        AppTextStyle.JETBRAINS_MONO -> R.string.font_jetbrains_mono
+        AppTextStyle.MANROPE -> R.string.font_manrope
+        else -> R.string.font_system_default
+    },
+)
+
+@Composable
+private fun AppTextStyle.appDescription(): String = stringResource(
+    id = when (this) {
+        AppTextStyle.DEFAULT -> R.string.font_system_default_desc
+        AppTextStyle.INTER -> R.string.font_inter_desc
+        AppTextStyle.NUNITO -> R.string.font_nunito_desc
+        AppTextStyle.LATO -> R.string.font_lato_desc
+        AppTextStyle.JETBRAINS_MONO -> R.string.font_jetbrains_mono_desc
+        AppTextStyle.MANROPE -> R.string.font_manrope_desc
+        else -> R.string.font_system_default_desc
+    },
+)

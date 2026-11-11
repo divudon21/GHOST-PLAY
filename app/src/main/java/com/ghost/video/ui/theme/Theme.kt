@@ -145,6 +145,10 @@ private val InterFontFamily = FontFamily(Font(R.font.inter_variable))
 private val CabaretFontFamily = FontFamily(Font(R.font.cabaret))
 private val GrazingMaceFontFamily = FontFamily(Font(R.font.grazing_mace))
 private val AbrahamStampFontFamily = FontFamily(Font(R.font.abraham_stamp))
+private val LatoFontFamily = FontFamily(
+    Font(R.font.lato_regular),
+    Font(R.font.lato_bold, weight = androidx.compose.ui.text.font.FontWeight.Bold),
+)
 
 private fun typographyWithFamily(fontFamily: FontFamily): Typography {
     val base = DefaultAppTypography
@@ -176,6 +180,7 @@ private val InterAppTypography = typographyWithFamily(InterFontFamily)
 private val CabaretAppTypography = typographyWithFamily(CabaretFontFamily)
 private val GrazingMaceAppTypography = typographyWithFamily(GrazingMaceFontFamily)
 private val AbrahamStampAppTypography = typographyWithFamily(AbrahamStampFontFamily)
+private val LatoAppTypography = typographyWithFamily(LatoFontFamily)
 
 private fun boldTypography(base: Typography): Typography {
     fun TextStyle.bold() = copy(fontWeight = FontWeight.Bold)
@@ -208,6 +213,24 @@ private val InterBoldTypography = boldTypography(InterAppTypography)
 private val CabaretBoldTypography = boldTypography(CabaretAppTypography)
 private val GrazingMaceBoldTypography = boldTypography(GrazingMaceAppTypography)
 private val AbrahamStampBoldTypography = boldTypography(AbrahamStampAppTypography)
+private val LatoBoldTypography = boldTypography(LatoAppTypography)
+
+/**
+ * Font family used to preview an app text style inside the Appearance screen, so
+ * every option is rendered in the font it selects. `null` means the system font.
+ */
+fun appTextStyleFontFamily(textStyle: AppTextStyle): FontFamily? = when (textStyle) {
+    AppTextStyle.DEFAULT -> null
+    AppTextStyle.MANROPE -> ManropeFontFamily
+    AppTextStyle.NUNITO -> NunitoFontFamily
+    AppTextStyle.LORA -> LoraFontFamily
+    AppTextStyle.JETBRAINS_MONO -> JetBrainsMonoFontFamily
+    AppTextStyle.INTER -> InterFontFamily
+    AppTextStyle.CABARET -> CabaretFontFamily
+    AppTextStyle.GRAZING_MACE -> GrazingMaceFontFamily
+    AppTextStyle.ABRAHAM_STAMP -> AbrahamStampFontFamily
+    AppTextStyle.LATO -> LatoFontFamily
+}
 
 @Composable
 fun AgonAppTheme(
@@ -257,6 +280,7 @@ fun AgonAppTheme(
         AppTextStyle.CABARET -> if (boldText) CabaretBoldTypography else CabaretAppTypography
         AppTextStyle.GRAZING_MACE -> if (boldText) GrazingMaceBoldTypography else GrazingMaceAppTypography
         AppTextStyle.ABRAHAM_STAMP -> if (boldText) AbrahamStampBoldTypography else AbrahamStampAppTypography
+        AppTextStyle.LATO -> if (boldText) LatoBoldTypography else LatoAppTypography
     }
 
     MaterialTheme(
