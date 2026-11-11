@@ -338,10 +338,15 @@ private fun Modifier.miniPlayerGestures(
                 if (!change.pressed || change.isConsumed) return@awaitEachGesture
                 val moved = change.position - down.position
                 if (moved.getDistance() < viewConfiguration.touchSlop) continue
-                vertical = moved.y < 0f && abs(moved.x) < -moved.y * PULL_BIAS
-                // Downwards has nothing to do on the bar, and nor has a pull
-                // with no player to pull: left as they always were, a drag that
-                // ends inside the bar still counts as its tap.
+                // Up is a pull and gets [PULL_BIAS] the benefit of the doubt, for
+                // the arcing thumb. Down is a dismissal, and gets none: nothing
+                // else on this bar means anything by moving down.
+                val up = moved.y < 0f && abs(moved.x) < -moved.y * PULL_BIAS
+                val down = moved.y > 0f && abs(moved.x) < moved.y
+                vertical = up || down
+                // A pull with no player to pull, or a drag that never committed to
+                // an axis: left as it always was, so a drag that ends inside the
+                // bar still counts as its tap.
                 if (!vertical && abs(moved.x) < abs(moved.y)) return@awaitEachGesture
                 if (vertical && pull == null) return@awaitEachGesture
                 change.consume()
@@ -370,14 +375,22 @@ private fun Modifier.miniPlayerGestures(
             tracker.addPointerInputChange(down)
             tracker.addPointerInputChange(slopped)
             target.drag(slopped.position.y - down.position.y)
+            // Upwards, in pixels. The bar follows this one; a downward drag does
+            // not move the bar at all (there is nothing under it to open), so it
+            // is counted separately and only decides whether the bar goes.
             var pulled = 0f
+            var pushed = 0f
             val finished = drag(pointer) { change ->
                 val delta = change.positionChange().y
                 change.consume()
                 tracker.addPointerInputChange(change)
-                pulled -= delta
-                target.drag(delta)
-                lift.floatValue = pullLift(pulled, liftEase)
+                if (delta < 0f) {
+                    pulled -= delta
+                    target.drag(delta)
+                    lift.floatValue = pullLift(pulled, liftEase)
+                } else {
+                    pushed += delta
+                }
             }
             val velocity = if (finished) {
                 tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity)
@@ -388,7 +401,8 @@ private fun Modifier.miniPlayerGestures(
             // upwards, meant the player; a drag that carried it down as far meant
             // "put it away"; everything else springs home having meant nothing.
             val committed = pulled > liftEase * PULL_COMMIT_SHARE || velocity < -PULL_FLICK_VELOCITY
-            val dismissed = !committed && pulled < -liftEase * PULL_COMMIT_SHARE
+            val dismissed = !committed &&
+                (pushed > liftEase * PULL_COMMIT_SHARE || velocity > PULL_FLICK_VELOCITY)
             target.release(velocity)
             val from = lift.floatValue
             settle[0] = scope.launch {
