@@ -120,6 +120,9 @@ fun HomeScreen(
     // the URL field and the open panels because plain remember is not preserved
     // when the destination leaves composition.
     var url by rememberSaveable { mutableStateOf("") }
+    // The network stream field is hidden until the link button in the top bar is
+    // tapped; tapping it again collapses the field.
+    var showUrlInput by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current
@@ -198,8 +201,6 @@ fun HomeScreen(
     val streamCard: @Composable () -> Unit = {
         NetworkStreamCard(
             modifier = Modifier.padding(bottom = 4.dp),
-            title = "Network stream",
-            description = "Choose a video file from network and play.",
             placeholder = "http://example.com/stream.mp4",
             actionLabel = "Open network stream",
             url = url,
@@ -263,6 +264,18 @@ fun HomeScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = {
+                            showUrlInput = !showUrlInput
+                            if (!showUrlInput) focusManager.clearFocus()
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_url),
+                            contentDescription = if (showUrlInput) "Hide URL box" else "Add URL",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             )
         }
@@ -273,10 +286,17 @@ fun HomeScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-        Spacer(modifier = Modifier.height(16.dp))
-        
+        // Expands/collapses with the top-bar link button. The animation is the
+        // stock Compose expand/fade pair, no custom motion.
+        AnimatedVisibility(
+            visible = showUrlInput,
+            enter = fadeIn(animationSpec = tween(220)) + expandVertically(animationSpec = tween(260)),
+            exit = fadeOut(animationSpec = tween(160)) + shrinkVertically(animationSpec = tween(220))
+        ) {
+            Box(modifier = Modifier.padding(bottom = 12.dp)) { streamCard() }
+        }
+
         if (!hasPermission) {
-            streamCard()
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -328,7 +348,6 @@ fun HomeScreen(
                 }
             }
         } else if (localVideos.isEmpty()) {
-            streamCard()
             EmptyState(
                 icon = Icons.Default.VideoFile,
                 title = "No videos found",
@@ -348,9 +367,6 @@ fun HomeScreen(
                         contentPadding = PaddingValues(vertical = 4.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        item {
-                            streamCard()
-                        }
                         items(filteredVideos, key = { it.uri }) { video ->
                             VideoListItem(
                                 video = video,
@@ -369,9 +385,6 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item(span = { GridItemSpan(2) }) {
-                            streamCard()
-                        }
                         items(filteredVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
@@ -392,9 +405,6 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item(span = { GridItemSpan(2) }) {
-                            streamCard()
-                        }
                         items(filteredVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
@@ -416,9 +426,6 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        item(span = { GridItemSpan(2) }) {
-                            streamCard()
-                        }
                         if (filteredVideos.isNotEmpty()) {
                             item(span = { GridItemSpan(2) }) {
                                 val video = filteredVideos.first()

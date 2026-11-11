@@ -5,6 +5,18 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.18
+
+### Interface
+- The link button is back in the Home top bar (`FilledTonalIconButton` with the
+  app's `ic_url` drawable, stock Material 3 ripple and press state). Tapping it
+  expands the network stream field with the standard
+  `fadeIn + expandVertically` / `fadeOut + shrinkVertically` pair; tapping again
+  collapses it and clears focus.
+- `NetworkStreamCard` no longer draws its *Network stream* title and
+  *Choose a video file from network and play.* description; the card is a single
+  instance above the content instead of one copy per layout.
+
 ## 3.17
 
 ### Interface
