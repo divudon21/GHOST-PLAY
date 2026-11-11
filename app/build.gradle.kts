@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.video"
         minSdk = 24
         targetSdk = 36
-        versionCode = 26
-        versionName = "3.12"
+        versionCode = 27
+        versionName = "3.13"
     }
 
     signingConfigs {
@@ -109,7 +109,9 @@ dependencies {
 
     implementation("com.github.skydoves:cloudy:0.1.2")
 
-    val media3Version = "1.5.0"
+    // Media3 1.11.1 is required by NextLib: its FFmpeg/libass decoders are built
+    // against this exact Media3 line, and the player code below is written for its API.
+    val media3Version = "1.11.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
@@ -117,7 +119,13 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-rtsp:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media:media:1.7.0")
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
+
+    // Software decoders (FFmpeg: H.264/HEVC/VP8/VP9/AV1 + every common audio codec)
+    // and native subtitle rendering (libass for ASS/SSA styling, FFmpeg for PGS,
+    // VobSub and DVB bitmap subtitles). Media3 alone can only decode what the
+    // device's MediaCodec understands, which is why this replaces the audio-only
+    // Jellyfin FFmpeg decoder the app shipped before.
+    implementation("io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.18.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

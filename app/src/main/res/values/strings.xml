@@ -59,6 +59,12 @@
     <string name="subtitle_background">Subtitle background</string>
     <string name="subtitle_background_desc">Enable background to subtitle text</string>
     <string name="embedded_styles">Embedded styles</string>
+    <string name="subtitle_delay">Subtitle delay</string>
+    <string name="subtitle_delay_off">In sync (no delay)</string>
+    <string name="subtitle_delay_desc">Shift subtitles earlier or later to match the video</string>
+    <string name="subtitle_speed">Subtitle speed</string>
+    <string name="subtitle_speed_desc">Correct slow drift between subtitles and video</string>
+    <string name="subtitle_delay_short">Delay</string>
     <string name="embedded_styles_desc">Apply the embedded styles that are present in subtitle files, such as ASS and so on</string>
     <string name="thumbnail_generation">Thumbnail generation</string>
     <string name="thumbnail_generation_strategy">Thumbnail generation strategy</string>

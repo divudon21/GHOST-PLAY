@@ -25,6 +25,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
+import com.ghost.video.data.MAX_SUBTITLE_DELAY
+import com.ghost.video.data.MAX_SUBTITLE_SPEED
+import com.ghost.video.data.MIN_SUBTITLE_DELAY
+import com.ghost.video.data.MIN_SUBTITLE_SPEED
 import com.ghost.video.data.SubtitleFont
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
@@ -56,6 +60,8 @@ fun SubtitleSettingsScreen(
     val subtitleSize by viewModel.subtitleSize.collectAsState()
     val subtitleBackground by viewModel.subtitleBackground.collectAsState()
     val subtitleEmbeddedStyles by viewModel.subtitleEmbeddedStyles.collectAsState()
+    val subtitleDelay by viewModel.subtitleDelay.collectAsState()
+    val subtitleSpeed by viewModel.subtitleSpeed.collectAsState()
     val systemCaptionStyle by viewModel.systemCaptionStyle.collectAsState()
 
     var fontExpanded by remember { mutableStateOf(false) }
@@ -145,6 +151,40 @@ fun SubtitleSettingsScreen(
                     icon = NextIcons.Style,
                     isChecked = subtitleEmbeddedStyles,
                     onClick = { viewModel.setSubtitleEmbeddedStyles(!subtitleEmbeddedStyles) },
+                )
+                // Timing correction for subtitles that do not match the video
+                // (typical for sidecar files and re-encoded releases).
+                PreferenceSlider(
+                    title = stringResource(id = R.string.subtitle_delay),
+                    description = when {
+                        subtitleDelay == 0 -> stringResource(id = R.string.subtitle_delay_off)
+                        subtitleDelay > 0 -> "+%.1fs".format(subtitleDelay / 1000f)
+                        else -> "-%.1fs".format(-subtitleDelay / 1000f)
+                    },
+                    icon = NextIcons.Timer,
+                    value = subtitleDelay.toFloat(),
+                    valueRange = MIN_SUBTITLE_DELAY.toFloat()..MAX_SUBTITLE_DELAY.toFloat(),
+                    steps = 39,
+                    // Snap to 0.5 s steps and only persist real changes, otherwise a
+                    // single drag would write hundreds of DataStore edits.
+                    onValueChange = { raw ->
+                        val snapped = (raw / 500f).toInt() * 500
+                        if (snapped != subtitleDelay) viewModel.setSubtitleDelay(snapped)
+                        Unit
+                    },
+                )
+                PreferenceSlider(
+                    title = stringResource(id = R.string.subtitle_speed),
+                    description = "%.3f×".format(subtitleSpeed),
+                    icon = NextIcons.Speed,
+                    value = subtitleSpeed,
+                    valueRange = MIN_SUBTITLE_SPEED..MAX_SUBTITLE_SPEED,
+                    steps = 19,
+                    onValueChange = { raw ->
+                        val snapped = (raw * 100f).toInt() / 100f
+                        if (snapped != subtitleSpeed) viewModel.setSubtitleSpeed(snapped)
+                        Unit
+                    },
                     isLastItem = true,
                 )
             }

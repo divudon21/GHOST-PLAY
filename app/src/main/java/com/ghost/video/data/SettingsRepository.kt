@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
+/** Subtitle timing limits shared by the settings UI and the player. */
+const val MIN_SUBTITLE_DELAY = -20_000
+const val MAX_SUBTITLE_DELAY = 20_000
+const val MIN_SUBTITLE_SPEED = 0.90f
+const val MAX_SUBTITLE_SPEED = 1.10f
+
 enum class ThemePreference {
     SYSTEM, LIGHT, DARK
 }
@@ -135,6 +141,8 @@ class SettingsRepository(private val context: Context) {
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
     private val SEARCH_AUTO_KEYBOARD_KEY = booleanPreferencesKey("search_auto_keyboard")
+    private val SUBTITLE_DELAY_KEY = intPreferencesKey("subtitle_delay_ms")
+    private val SUBTITLE_SPEED_KEY = intPreferencesKey("subtitle_speed_permille")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
     private val UPDATES_AUTO_CHECK_KEY = booleanPreferencesKey("updates_auto_check")
     private val UPDATES_NOTIFICATIONS_KEY = booleanPreferencesKey("updates_notifications")
@@ -313,6 +321,17 @@ class SettingsRepository(private val context: Context) {
     val highContrastDark: Flow<Boolean> = context.dataStore.data
         .map { it[HIGH_CONTRAST_DARK_KEY] ?: false }
 
+    /** Subtitle timing correction in milliseconds (positive = subtitles appear later). */
+    val subtitleDelay: Flow<Int> = context.dataStore.data
+        .map { (it[SUBTITLE_DELAY_KEY] ?: 0).coerceIn(MIN_SUBTITLE_DELAY, MAX_SUBTITLE_DELAY) }
+
+    /**
+     * Subtitle speed stored as permille (1000 = normal) so DataStore stays integer
+     * based; exposed as a Float multiplier (0.9 .. 1.1) for the player.
+     */
+    val subtitleSpeed: Flow<Float> = context.dataStore.data
+        .map { (it[SUBTITLE_SPEED_KEY] ?: 1000).coerceIn(900, 1100) / 1000f }
+
     /** Update preferences, matching DownList's UpdateService options. */
     val updatesPreferences: Flow<UpdatesPreferences> = context.dataStore.data
         .map { preferences ->
@@ -488,6 +507,18 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setHighContrastDark(enabled: Boolean) {
         context.dataStore.edit { it[HIGH_CONTRAST_DARK_KEY] = enabled }
+    }
+
+    suspend fun setSubtitleDelay(milliseconds: Int) {
+        context.dataStore.edit {
+            it[SUBTITLE_DELAY_KEY] = milliseconds.coerceIn(MIN_SUBTITLE_DELAY, MAX_SUBTITLE_DELAY)
+        }
+    }
+
+    suspend fun setSubtitleSpeed(multiplier: Float) {
+        context.dataStore.edit {
+            it[SUBTITLE_SPEED_KEY] = (multiplier * 1000f).toInt().coerceIn(900, 1100)
+        }
     }
 
     suspend fun setUpdatesAutoCheck(enabled: Boolean) {

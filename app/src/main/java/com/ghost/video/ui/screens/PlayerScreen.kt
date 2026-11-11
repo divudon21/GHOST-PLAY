@@ -64,10 +64,17 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.DefaultExtractorsFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegSubtitleExtractorsFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.withFfmpegSubtitles
+import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleDelayMilliseconds
+import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleSpeed
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -143,6 +150,10 @@ fun PlayerScreen(url: String) {
     val subtitleSize by settingsRepository.subtitleSize.collectAsState(initial = 20)
     val subtitleBackground by settingsRepository.subtitleBackground.collectAsState(initial = false)
     val subtitleEmbeddedStyles by settingsRepository.subtitleEmbeddedStyles.collectAsState(initial = true)
+    // Subtitle sync: delay shifts the cues in time, speed corrects slow drift.
+    // Both preferences also ship as sliders in Subtitle settings.
+    val subtitleDelaySetting by settingsRepository.subtitleDelay.collectAsState(initial = 0)
+    val subtitleSpeedSetting by settingsRepository.subtitleSpeed.collectAsState(initial = 1f)
     val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
     val appColor by settingsRepository.appColor.collectAsState(initial = com.ghost.video.data.AppColor.PURPLE)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
@@ -329,19 +340,32 @@ fun PlayerScreen(url: String) {
             DecoderPriority.PREFER_APP -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             DecoderPriority.DEVICE_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
         }
-        val extractorsFactory = DefaultExtractorsFactory()
+        // Data source used by the media source AND by external subtitle sidecars, so
+        // a subtitle loaded from the same place as the video keeps the same URI,
+        // header and caching support.
+        val dataSourceFactory = DefaultDataSource.Factory(context)
+        // FfmpegSubtitleExtractorsFactory keeps standard Media3 parsing for SRT,
+        // WebVTT and TTML while routing ASS/SSA (libass), PGS, VobSub and DVB through
+        // the bundled FFmpeg decoders, and it extracts fonts attached to Matroska.
+        val extractorsFactory = FfmpegSubtitleExtractorsFactory(DefaultExtractorsFactory())
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
+            .setDataSourceFactory(dataSourceFactory)
+            .withFfmpegSubtitles(dataSourceFactory)
 
-        // Standard ExoPlayer setup (same as NextPlayer): renderers factory with
-        // the chosen extension mode, an explicit media audio focus request, and
-        // no custom audio processors in the pipeline.
+        // NextPlayer's player stack: NextRenderersFactory adds FFmpeg software
+        // decoders (H.264, HEVC, VP8, VP9, AV1 via dav1d, plus AAC/AC3/E-AC3/DTS/
+        // TrueHD/FLAC/ALAC/Opus/Vorbis audio) behind the device's own MediaCodec
+        // decoders, so files the phone cannot decode in hardware still play.
+        // Decoder fallback is enabled as well, so a faulty MediaCodec decoder
+        // hands the track to the next candidate instead of failing the video.
         fun buildPlayer(mode: Int): ExoPlayer = ExoPlayer.Builder(context)
             .setRenderersFactory(
-                DefaultRenderersFactory(context).setExtensionRendererMode(mode)
+                NextRenderersFactory(context)
+                    .setExtensionRendererMode(mode)
+                    .setEnableDecoderFallback(true)
             )
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory)
-            )
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
@@ -363,6 +387,12 @@ fun PlayerScreen(url: String) {
         }
 
         player.apply {
+            // Subtitle timing. nextlib's NextTextRenderer exposes these on the
+            // player itself (Media3 1.11 API), so no view plumbing is needed.
+            runCatching {
+                subtitleDelayMilliseconds = subtitleDelaySetting.toLong()
+                subtitleSpeed = subtitleSpeedSetting
+            }
             // Any failure has to be VISIBLE: the screen is black otherwise and the
             // user has no idea whether the file, the codec or the container failed.
             addListener(object : Player.Listener {
@@ -917,17 +947,22 @@ fun PlayerScreen(url: String) {
                 },
                 onOpenExternal = {
                     // Last resort: hand the file/stream to whatever else the user has.
+                    // A *typed* ACTION_VIEW is only handled by apps that declare that
+                    // MIME type, which most browsers (the usual external opener for a
+                    // stream link) do not - it then throws ActivityNotFoundException.
+                    // Try the bare URI first and fall back to a typed intent.
                     runCatching {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                            setDataAndType(
-                                android.net.Uri.parse(url),
-                                "video/*"
-                            )
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setData(android.net.Uri.parse(url))
                             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(intent)
+                        })
+                    }.recoverCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setDataAndType(android.net.Uri.parse(url), "video/*")
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        })
                     }.onFailure {
-                        Toast.makeText(context, "No other video player found", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "No other app can open this link", Toast.LENGTH_SHORT).show()
                     }
                 }
             )
