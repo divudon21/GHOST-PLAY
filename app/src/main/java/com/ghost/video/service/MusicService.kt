@@ -29,9 +29,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
-@OptIn(UnstableApi::class)
 // MediaStyleNotificationHelper (Media3 1.11's replacement for the removed
-// sessionCompatToken) is itself an unstable API.
+// sessionCompatToken) is an unstable API, hence the OptIn.
 @androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
 
