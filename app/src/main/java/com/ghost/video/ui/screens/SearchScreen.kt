@@ -65,6 +65,9 @@ import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
 /**
@@ -117,10 +120,7 @@ fun SearchScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        // The field is the whole point of the screen, so it starts focused.
-        focusRequester.requestFocus()
-    }
+    SearchAutoFocus(settingsViewModel.searchAutoKeyboard, focusRequester)
 
     val trimmedQuery = query.trim()
     val results = remember(videos, trimmedQuery) {
@@ -272,6 +272,15 @@ fun SearchScreen(
     // Keep the newest query in the history once results are shown.
     LaunchedEffect(trimmedQuery) {
         if (trimmedQuery.length > 2 && results.isNotEmpty()) rememberQuery(trimmedQuery)
+    }
+}
+
+/** Apply the persisted choice once per visit, without stealing focus on later updates. */
+@Composable
+internal fun SearchAutoFocus(enabled: StateFlow<Boolean?>, focusRequester: FocusRequester) {
+    LaunchedEffect(enabled, focusRequester) {
+        // Wait for DataStore rather than briefly opening the keyboard for a saved off setting.
+        if (enabled.filterNotNull().first()) focusRequester.requestFocus()
     }
 }
 

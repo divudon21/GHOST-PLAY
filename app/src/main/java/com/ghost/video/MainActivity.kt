@@ -119,6 +119,7 @@ import com.ghost.video.ui.screens.GesturesSettingsScreen
 import com.ghost.video.ui.screens.PlayerScreen
 import com.ghost.video.ui.screens.PlayerSettingsScreen
 import com.ghost.video.ui.screens.SettingsScreen
+import com.ghost.video.ui.screens.SearchSettingsScreen
 import com.ghost.video.ui.screens.SubtitleSettingsScreen
 import com.ghost.video.ui.screens.ThumbnailSettingsScreen
 import com.ghost.video.ui.theme.AgonAppTheme
@@ -542,6 +543,7 @@ fun MainApp(
                 popExitTransition = { TAB_EXIT }
             ) {
                 SearchScreen(
+                    settingsViewModel = sharedSettingsViewModel,
                     onPlayUrl = { url ->
                         val encodedUrl = URLEncoder.encode(url, "UTF-8")
                         navController.navigate("player/$encodedUrl")
@@ -604,6 +606,7 @@ fun MainApp(
                     onNavigateToDecoder = { navController.navigate("decoder_settings") { launchSingleTop = true } },
                     onNavigateToAudio = { navController.navigate("audio_settings") { launchSingleTop = true } },
                     onNavigateToSubtitle = { navController.navigate("subtitle_settings") { launchSingleTop = true } },
+                    onNavigateToSearch = { navController.navigate("search_settings") { launchSingleTop = true } },
                     onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } },
                     onNavigateToUpdates = { navController.navigate("updates") { launchSingleTop = true } },
                     onSwipeNext = { swipeToAdjacentTab(1) },
@@ -678,6 +681,18 @@ fun MainApp(
                 popExitTransition = { TAB_SLIDE_OUT_RIGHT }
             ) {
                 SubtitleSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = sharedSettingsViewModel
+                )
+            }
+            composable(
+                "search_settings",
+                enterTransition = { TAB_SLIDE_IN_RIGHT },
+                exitTransition = { TAB_SLIDE_OUT_LEFT },
+                popEnterTransition = { TAB_SLIDE_IN_LEFT },
+                popExitTransition = { TAB_SLIDE_OUT_RIGHT }
+            ) {
+                SearchSettingsScreen(
                     onBack = { navController.popBackStack() },
                     viewModel = sharedSettingsViewModel
                 )

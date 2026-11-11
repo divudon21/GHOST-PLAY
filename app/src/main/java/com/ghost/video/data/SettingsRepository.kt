@@ -134,6 +134,7 @@ class SettingsRepository(private val context: Context) {
     private val SYSTEM_CAPTION_STYLE_KEY = booleanPreferencesKey("system_caption_style")
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
+    private val SEARCH_AUTO_KEYBOARD_KEY = booleanPreferencesKey("search_auto_keyboard")
     private val HIGH_CONTRAST_DARK_KEY = booleanPreferencesKey("high_contrast_dark")
     private val UPDATES_AUTO_CHECK_KEY = booleanPreferencesKey("updates_auto_check")
     private val UPDATES_NOTIFICATIONS_KEY = booleanPreferencesKey("updates_notifications")
@@ -306,6 +307,9 @@ class SettingsRepository(private val context: Context) {
     val volumeBoostEnabled: Flow<Boolean> = context.dataStore.data
         .map { it[VOLUME_BOOST_KEY] ?: false }
 
+    val searchAutoKeyboard: Flow<Boolean> = context.dataStore.data
+        .map { it[SEARCH_AUTO_KEYBOARD_KEY] ?: true }
+
     val highContrastDark: Flow<Boolean> = context.dataStore.data
         .map { it[HIGH_CONTRAST_DARK_KEY] ?: false }
 
@@ -476,6 +480,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
         context.dataStore.edit { it[VOLUME_BOOST_KEY] = enabled }
+    }
+
+    suspend fun setSearchAutoKeyboard(enabled: Boolean) {
+        context.dataStore.edit { it[SEARCH_AUTO_KEYBOARD_KEY] = enabled }
     }
 
     suspend fun setHighContrastDark(enabled: Boolean) {
