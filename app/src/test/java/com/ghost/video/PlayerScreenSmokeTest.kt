@@ -1,7 +1,8 @@
 package com.ghost.video
 
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.assertCountEquals
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ghost.video.ui.screens.PlayerScreen
 import org.junit.Rule
@@ -31,6 +32,12 @@ class PlayerScreenSmokeTest {
         // Composition must not throw. A real play attempt is not possible here
         // (Robolectric has no codecs), but the screen has to render rather than
         // crash - and the failure panel must be able to describe an error.
-        composeRule.onRoot().assertExists()
+        //
+        // The player's control row holds a ComposeView for the mute button, and a
+        // ComposeView is a composition root of its own, so there are two roots
+        // here by design: the screen's, and the mute button's. One root was the
+        // expectation before that button became a composable.
+        composeRule.onAllNodes(isRoot()).assertCountEquals(2)
+        composeRule.onAllNodes(isRoot())[0].assertExists()
     }
 }
