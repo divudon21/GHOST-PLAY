@@ -947,17 +947,22 @@ fun PlayerScreen(url: String) {
                 },
                 onOpenExternal = {
                     // Last resort: hand the file/stream to whatever else the user has.
+                    // A *typed* ACTION_VIEW is only handled by apps that declare that
+                    // MIME type, which most browsers (the usual external opener for a
+                    // stream link) do not - it then throws ActivityNotFoundException.
+                    // Try the bare URI first and fall back to a typed intent.
                     runCatching {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                            setDataAndType(
-                                android.net.Uri.parse(url),
-                                "video/*"
-                            )
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setData(android.net.Uri.parse(url))
                             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(intent)
+                        })
+                    }.recoverCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setDataAndType(android.net.Uri.parse(url), "video/*")
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        })
                     }.onFailure {
-                        Toast.makeText(context, "No other video player found", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "No other app can open this link", Toast.LENGTH_SHORT).show()
                     }
                 }
             )
