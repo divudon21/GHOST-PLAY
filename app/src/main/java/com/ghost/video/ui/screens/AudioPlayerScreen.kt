@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -94,18 +95,28 @@ import kotlin.math.roundToInt
  *  - the scrubber and the transport, from `ui/player/PlayerControls.kt` and
  *    `ui/player/ThinSlider.kt`.
  *
- * What is Ghost Play's, and had to be: the dismiss motion. BitChord's player is
- * a Material 3 sheet in a window of its own and is moved by `PlayerSheetMotion`;
- * this one is a navigation destination, so there is no sheet to ask and the
- * screen follows the finger itself — on the same critically damped spring, so
- * the movement is indistinguishable. The playhead likewise comes from this
- * app's own MediaSession-backed service rather than from BitChord's playback
- * connection.
+ * What is Ghost Play's, and had to be: who moves the sheet. BitChord's player is
+ * a Material 3 sheet in a window of its own, moved by `PlayerSheetMotion`; this
+ * one is drawn over the app by `MainApp`, which runs the arrival on BitChord's
+ * spring and hands the displacement in through [extraDisplacementPx]. The
+ * dismissal is this screen's own, on the same spring, so a drag and the arrival
+ * move one sheet rather than competing over it. The playhead likewise comes from
+ * this app's own MediaSession-backed service rather than from BitChord's
+ * playback connection.
  */
 @Composable
 fun AudioPlayerScreen(
     audioViewModel: AudioViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /**
+     * How far the sheet is currently displaced, in pixels — read, never written.
+     *
+     * The sheet is arranged by whoever shows it (the app draws it over the
+     * pages), which is also what animates its arrival. The displacement is
+     * therefore owned by that caller and handed in, so the arrival animation and
+     * a drag can move the same sheet instead of fighting over one value.
+     */
+    extraDisplacementPx: () -> Float = { 0f },
 ) {
     val currentAudio by audioViewModel.currentAudio.collectAsState()
     val isPlaying by audioViewModel.isPlaying.collectAsState()
@@ -194,6 +205,8 @@ fun AudioPlayerScreen(
     fun closePlayer() {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         scope.launch {
+            // Far enough that no part of the sheet is still on screen when the
+            // caller is told it is gone.
             val travel = artBottomPx.toFloat().coerceAtLeast(1f) + with(density) { 480.dp.toPx() }
             animate(
                 initialValue = dragOffset,
@@ -247,7 +260,10 @@ fun AudioPlayerScreen(
     ) {
         ArtworkMeshBackdrop(
             mesh = mesh,
-            seam = { with(density) { seamPx.toDp() } },
+            // The sheet's own displacement is applied by this box's layer, so the
+            // seam — measured in window space — has to give it back before the
+            // backdrop reads it, or the mesh edge would follow the drag twice.
+            seam = { with(density) { (seamPx - extraDisplacementPx()).coerceAtLeast(0f).toDp() } },
         )
 
         Column(

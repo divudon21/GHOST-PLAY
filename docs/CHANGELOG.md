@@ -5,6 +5,28 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.23
+
+### Fixed
+- **The blank moment when the full player opened or closed is gone**, and the
+  cause was structural: the player was a navigation route, so the page it was
+  opened from had to leave before it could arrive and there was always a frame
+  with neither of the two on screen — 100ms of it, then a whole transition
+  afterwards. It is now a modal sheet drawn over the app by `MainApp`, which is
+  how BitChord holds its own player: the page stays composed and painted
+  underneath for the entire arrival, so there is no frame that can be empty.
+  The sheet rises from the bottom edge on BitChord's spring (`SLIDE_STIFFNESS`
+  195, critically damped) and takes itself off on the same spring when it is
+  dragged or dismissed, so nothing animates after the content has gone.
+- **Settings scrolls again.** `Modifier.tabSwipe` claimed the pointer at the
+  touch slop for any drag whose horizontal travel merely matched its vertical
+  travel, which a slow vertical scroll does — so the page under it stopped
+  moving. The swipe now waits until the drag is 1.5x further sideways than up or
+  down before it takes the gesture, and a gesture decided vertical is never
+  stolen later; a drag that something under the finger already consumed is left
+  alone. The list's scroll state is also hoisted out of the modifier chain, so a
+  recomposition cannot replace it mid-scroll.
+
 ## 3.22
 
 ### Interface
