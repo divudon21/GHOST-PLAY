@@ -85,6 +85,8 @@ data class UpdateRelease(
     val releaseUrl: String,
     val downloadUrl: String,
     val signerSha256: String,
+    /** Human-readable "what changed" section taken from the release notes. */
+    val notes: String = "",
 ) {
     val label: String
         get() = "$versionName (build $versionCode)" + if (prerelease) " · Beta" else ""
@@ -160,6 +162,7 @@ fun selectUpdateRelease(
                 releaseUrl = releaseUrl,
                 downloadUrl = downloadUrl,
                 signerSha256 = signer,
+                notes = extractReleaseNotes(body),
             )
             val current = newest
             if (current == null || release.versionCode > current.versionCode) newest = release
@@ -172,6 +175,51 @@ fun selectUpdateRelease(
     }
     val candidate = newest
     return if (candidate != null && candidate.versionCode > installed.versionCode) candidate else null
+}
+
+/**
+ * Turns a GitHub release body into the short "what changed" block the app shows.
+ *
+ * The workflow writes the body as: version header, the machine-readable
+ * `ghost-play-update` metadata comment, a changelog section with `###` headings
+ * and `- ` bullets, then the APK list. Only the changelog part is interesting to
+ * a user inside the app, so headers are flattened to "Heading · item" lines and
+ * the metadata comment, the APK list and compare links are dropped.
+ */
+internal fun extractReleaseNotes(body: String, maxChars: Int = 1200): String {
+    if (body.isBlank()) return ""
+    val output = StringBuilder()
+    var heading = ""
+    var inApks = false
+    for (rawLine in body.lineSequence()) {
+        val line = rawLine.trim()
+        when {
+            line.isEmpty() -> continue
+            // Machine metadata and pure links are noise inside the app.
+            line.contains("ghost-play-update") -> continue
+            line.startsWith("<!--") -> continue
+            line.startsWith("**Full diff**") || line.startsWith("Full technical changelog") -> continue
+            line.startsWith("## ") -> continue // release title, already shown as version
+            line.startsWith("### ") -> {
+                heading = line.removePrefix("### ").trim()
+                inApks = heading.contains("APK", ignoreCase = true)
+                continue
+            }
+            inApks -> continue
+            line.startsWith("- ") || line.startsWith("* ") -> {
+                val item = line.drop(2)
+                    .replace("**", "")
+                    .replace("`", "")
+                    .trim()
+                if (item.isEmpty()) continue
+                val rendered = if (heading.isEmpty()) "• $item" else "$heading · $item"
+                if (output.length + rendered.length + 1 > maxChars) return output.toString().trim()
+                if (output.isNotEmpty()) output.append('\n')
+                output.append(rendered)
+            }
+        }
+    }
+    return output.toString().trim()
 }
 
 /** Reads the installed package identity (version + signing certificate SHA-256). */

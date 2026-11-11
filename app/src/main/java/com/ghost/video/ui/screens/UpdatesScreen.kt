@@ -284,6 +284,20 @@ private fun UpdateAvailableCard(
                 fontWeight = FontWeight.Bold,
             )
             Text(text = release.label, modifier = Modifier.padding(top = 4.dp))
+            if (release.notes.isNotBlank()) {
+                Text(
+                    text = stringResource(id = R.string.updates_whats_new),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Text(
+                    text = release.notes,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = contentColor.copy(alpha = 0.85f),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             if (!compatible) {
                 Text(
                     text = stringResource(id = R.string.updates_signing_key_warning),

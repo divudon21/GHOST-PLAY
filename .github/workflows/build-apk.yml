@@ -109,26 +109,32 @@ jobs:
           METADATA=$(VERSION_NAME="$VERSION_NAME" VERSION_CODE="$VERSION_CODE" SIGNER="$SIGNER" python3 -c 'import json,os; print(json.dumps({"packageName":"com.ghost.video","versionName":os.environ["VERSION_NAME"],"versionCode":int(os.environ["VERSION_CODE"]),"signerSha256":os.environ["SIGNER"]},separators=(",",":")))')
           PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | sed -n '1p' || true)
           mkdir -p ci
+          # The changelog is derived from the commit range of this release, so the
+          # notes always describe what actually changed. Curated technical notes
+          # live in docs/CHANGELOG.md and are linked when present.
+          PREVIOUS_TAG="$PREVIOUS_TAG" CURRENT_TAG="$GITHUB_REF_NAME" REPO="$GITHUB_REPOSITORY" \
+            OUT_FILE=ci/changelog_section.md python3 .github/scripts/generate_release_notes.py
           cat <<EOF | sed 's/^[[:space:]]*//' > ci/release_notes.md
           ## Ghost Play ${VERSION_NAME}
 
-          Version code ${VERSION_CODE}.
+          Version code ${VERSION_CODE}. Built from \`${GITHUB_SHA:0:7}\` on the Media3 1.11.1 player stack.
 
           <!-- ghost-play-update:${METADATA} -->
 
+          EOF
+          cat ci/changelog_section.md >> ci/release_notes.md
+          cat <<EOF | sed 's/^[[:space:]]*//' >> ci/release_notes.md
           ### APKs
 
-          - **\`app-arm64-v8a-release.apk\`** *(Recommended)* — Modern 64-bit ARM devices.
-          - **\`app-armeabi-v7a-release.apk\`** — Older 32-bit ARM devices.
-          - **\`app-universal-release.apk\`** — Universal APK for all CPU architectures.
+          - **\`app-arm64-v8a-release.apk\`** *(Recommended)* — Modern 64-bit ARM devices (arm64-v8a).
+          - **\`app-armeabi-v7a-release.apk\`** — Older 32-bit ARM devices (armeabi-v7a).
+          - **\`app-universal-release.apk\`** — Universal APK, all four ABIs.
 
-          The app's built-in updater (Settings → Updates) reads the metadata above, so keep
-          these asset names unchanged.
+          Asset names are part of the updater contract: the in-app updater reads the
+          \`ghost-play-update\` metadata above and downloads \`app-universal-release.apk\`,
+          so neither may be renamed.
 
           EOF
-          if [ -n "$PREVIOUS_TAG" ]; then
-            echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREVIOUS_TAG}...${GITHUB_REF_NAME}" >> ci/release_notes.md
-          fi
           cat ci/release_notes.md
 
       - name: Attach APKs to release (tag builds)
