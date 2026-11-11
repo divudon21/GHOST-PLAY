@@ -29,7 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableFloatStateOf
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -316,7 +316,7 @@ private fun Modifier.miniPlayerGestures(
     onPrevious: () -> Unit,
     onPull: () -> Unit,
     onDismiss: () -> Unit,
-    lift: MutableFloatStateOf,
+    lift: MutableFloatState,
     settle: Array<Job?>,
     scope: kotlinx.coroutines.CoroutineScope,
 ): Modifier {
