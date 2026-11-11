@@ -107,15 +107,22 @@ jobs:
           test -n "$VERSION_NAME" && test -n "$VERSION_CODE" || { echo '::error title=BadgingError::Could not read version'; exit 1; }
           echo "$SIGNER" | grep -Eq '^[a-f0-9]{64}$' || { echo '::error title=SignerError::Unexpected signer digest'; exit 1; }
           METADATA=$(VERSION_NAME="$VERSION_NAME" VERSION_CODE="$VERSION_CODE" SIGNER="$SIGNER" python3 -c 'import json,os; print(json.dumps({"packageName":"com.ghost.video","versionName":os.environ["VERSION_NAME"],"versionCode":int(os.environ["VERSION_CODE"]),"signerSha256":os.environ["SIGNER"]},separators=(",",":")))')
-          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | sed -n '1p' || true)
+          # The baseline is the last *stable* release: a beta chain must be diffed
+          # against the stable line it leads away from, not against the previous
+          # beta, or the notes would list the beta's own work as if it were new.
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | grep -v 'beta' | sed -n '1p' || true)
           mkdir -p ci
           # The changelog is derived from the commit range of this release, so the
           # notes always describe what actually changed. Curated technical notes
           # live in docs/CHANGELOG.md and are linked when present.
           PREVIOUS_TAG="$PREVIOUS_TAG" CURRENT_TAG="$GITHUB_REF_NAME" REPO="$GITHUB_REPOSITORY" \
             OUT_FILE=ci/changelog_section.md python3 .github/scripts/generate_release_notes.py
+          # A beta says so in its own title, so a pre-release is never mistaken
+          # for the stable line even in a notification.
+          BETA_NOTE=""
+          case "$GITHUB_REF_NAME" in *beta*) BETA_NOTE=" (beta)" ;; esac
           cat <<EOF | sed 's/^[[:space:]]*//' > ci/release_notes.md
-          ## Ghost Play ${VERSION_NAME}
+          ## Ghost Play ${VERSION_NAME}${BETA_NOTE}
 
           Version code ${VERSION_CODE}. Built from \`${GITHUB_SHA:0:7}\` on the Media3 1.11.1 player stack.
 

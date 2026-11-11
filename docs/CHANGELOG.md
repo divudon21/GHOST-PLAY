@@ -5,6 +5,32 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.25 (beta)
+
+### Interface
+- **New app icon.** The launcher icon, its round variant and the adaptive-icon
+  layers were replaced with the Swiity icon set: five densities, foreground and
+  background kept as separate layers so every launcher shape masks it correctly.
+  The adaptive-icon XML is unchanged — the pack ships the same layer names.
+
+### Fixes
+- **Settings could not be scrolled to the end.** The last rows sat behind the
+  floating tab bar: the bar is drawn over the pages rather than laid out below
+  them (that is what keeps the mini player free of a band above and below it),
+  and nothing reserved the strip it covers, so "Updates" — the last row —
+  stopped half under it and, on a page whose content only just overflowed, could
+  not be brought up at all. Every scrolling tab page now ends with
+  `tabBarClearance()`: the bar's own 80dp plus the measured navigation-bar inset,
+  so the last row scrolls clear of the bar on gesture navigation, on three-button
+  navigation and on a device with no inset. Applied to Settings and its nine
+  sub-pages, to the home grid and list, to search results and to the music list.
+
+### Release
+- Published as a pre-release, and tagged `v3.25-beta`. Release notes are now
+  diffed against the last **stable** tag rather than the previous beta, so a beta
+  lists everything since the stable line instead of repeating the last beta's
+  work; a pre-release also titles itself "beta".
+
 ## 3.24 (beta)
 
 ### Interface

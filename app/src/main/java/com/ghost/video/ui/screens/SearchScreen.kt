@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.EmptyState
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.tabSwipe
@@ -246,7 +247,12 @@ fun SearchScreen(
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 168.dp),
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 24.dp + tabBarClearance(),
+                    ),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {

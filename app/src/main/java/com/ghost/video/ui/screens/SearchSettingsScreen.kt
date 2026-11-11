@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
@@ -56,7 +57,8 @@ fun SearchSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(state = rememberScrollState())
                 .padding(paddingValues = innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = tabBarClearance()),
         ) {
             ListSectionTitle(text = stringResource(id = R.string.search_title))
             Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {

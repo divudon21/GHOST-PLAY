@@ -34,6 +34,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.EmptyState
 import com.ghost.video.ui.components.NextSegmentedListItem
 import com.ghost.video.ui.components.NextTopAppBar
@@ -313,6 +315,9 @@ fun AudioScreen(
                     verticalArrangement = Arrangement.spacedBy(
                         androidx.compose.material3.ListItemDefaults.SegmentedGap
                     ),
+                    // The tab bar floats over the pages, so the last rows need
+                    // room to come up from under it.
+                    contentPadding = PaddingValues(bottom = tabBarClearance()),
                     modifier = Modifier.weight(1f)
                 ) {
                     itemsIndexed(localAudios, key = { _, audio -> audio.uri }) { index, audio ->

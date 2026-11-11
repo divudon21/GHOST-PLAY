@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.AudioLocales
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.ExpandingPreferenceItem
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
@@ -107,7 +108,8 @@ fun AudioSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(state = scrollState)
                 .padding(paddingValues = innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = tabBarClearance()),
         ) {
             ListSectionTitle(text = stringResource(id = R.string.playback))
             // The first group, which is the language row and its picker: the

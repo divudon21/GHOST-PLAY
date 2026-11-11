@@ -30,6 +30,7 @@ import com.ghost.video.data.MAX_SUBTITLE_SPEED
 import com.ghost.video.data.MIN_SUBTITLE_DELAY
 import com.ghost.video.data.MIN_SUBTITLE_SPEED
 import com.ghost.video.data.SubtitleFont
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.ExpandingPreferenceItem
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
@@ -88,7 +89,8 @@ fun SubtitleSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(state = rememberScrollState())
                 .padding(paddingValues = innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = tabBarClearance()),
         ) {
             ListSectionTitle(text = stringResource(id = R.string.appearance_name))
             Column(

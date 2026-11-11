@@ -29,6 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.ClickablePreferenceItem
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
@@ -76,7 +77,8 @@ fun GeneralSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(state = rememberScrollState())
                 .padding(paddingValues = innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = tabBarClearance()),
         ) {
             ListSectionTitle(text = stringResource(id = R.string.user_data))
             Column(
