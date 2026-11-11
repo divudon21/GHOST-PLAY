@@ -169,6 +169,38 @@ class MusicService : MediaSessionService() {
         super.onCreate()
         instance = this
 
+        // Audio preferences are player-wide upstream (not video-only), so music
+        // honours them too: audio focus, pause-on-disconnect and the preferred audio
+        // language. The player is built with the upstream defaults and the stored
+        // values are applied live as they are read, which keeps DataStore off the
+        // main thread while still taking effect before the first track plays.
+        val audioPreferencesRepository = SettingsRepository(applicationContext)
+        serviceScope.launch {
+            audioPreferencesRepository.requireAudioFocus.collect { enabled ->
+                player?.setAudioAttributes(
+                    androidx.media3.common.AudioAttributes.Builder()
+                        .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                        .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .build(),
+                    /* handleAudioFocus = */ enabled,
+                )
+            }
+        }
+        serviceScope.launch {
+            audioPreferencesRepository.pauseOnHeadsetDisconnect.collect { enabled ->
+                player?.setHandleAudioBecomingNoisy(enabled)
+            }
+        }
+        serviceScope.launch {
+            audioPreferencesRepository.preferredAudioLanguage.collect { language ->
+                val target = player ?: return@collect
+                target.trackSelectionParameters = target.trackSelectionParameters
+                    .buildUpon()
+                    .setPreferredAudioLanguage(language)
+                    .build()
+            }
+        }
+
         player = ExoPlayer.Builder(this)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()

@@ -279,6 +279,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = DialogThemePreference.FOLLOW_SYSTEM
         )
 
+    val preferredAudioLanguage: StateFlow<String> = repository.preferredAudioLanguage
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    val requireAudioFocus: StateFlow<Boolean> = repository.requireAudioFocus
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val pauseOnHeadsetDisconnect: StateFlow<Boolean> = repository.pauseOnHeadsetDisconnect
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val showSystemVolumePanel: StateFlow<Boolean> = repository.showSystemVolumePanel
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     val volumeBoostEnabled: StateFlow<Boolean> = repository.volumeBoostEnabled
         .stateIn(
             scope = viewModelScope,
@@ -448,6 +460,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setVolumeBoostEnabled(enabled: Boolean) {
         viewModelScope.launch { repository.setVolumeBoostEnabled(enabled) }
+    }
+
+    fun setPreferredAudioLanguage(language: String) {
+        viewModelScope.launch { repository.setPreferredAudioLanguage(language) }
+    }
+
+    fun setRequireAudioFocus(enabled: Boolean) {
+        viewModelScope.launch { repository.setRequireAudioFocus(enabled) }
+    }
+
+    fun setPauseOnHeadsetDisconnect(enabled: Boolean) {
+        viewModelScope.launch { repository.setPauseOnHeadsetDisconnect(enabled) }
+    }
+
+    fun setShowSystemVolumePanel(enabled: Boolean) {
+        viewModelScope.launch { repository.setShowSystemVolumePanel(enabled) }
     }
 
     fun setHighContrastDark(enabled: Boolean) {

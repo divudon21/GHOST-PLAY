@@ -140,6 +140,11 @@ class SettingsRepository(private val context: Context) {
     private val SYSTEM_CAPTION_STYLE_KEY = booleanPreferencesKey("system_caption_style")
     private val DIALOG_THEME_KEY = intPreferencesKey("dialog_theme_preference")
     private val VOLUME_BOOST_KEY = booleanPreferencesKey("volume_boost_enabled")
+    // NextPlayer's audio preferences. Defaults match PlayerPreferences() upstream.
+    private val PREFERRED_AUDIO_LANGUAGE_KEY = stringPreferencesKey("preferred_audio_language")
+    private val REQUIRE_AUDIO_FOCUS_KEY = booleanPreferencesKey("require_audio_focus")
+    private val PAUSE_ON_HEADSET_DISCONNECT_KEY = booleanPreferencesKey("pause_on_headset_disconnect")
+    private val SYSTEM_VOLUME_PANEL_KEY = booleanPreferencesKey("system_volume_panel")
     private val SEARCH_AUTO_KEYBOARD_KEY = booleanPreferencesKey("search_auto_keyboard")
     private val SUBTITLE_DELAY_KEY = intPreferencesKey("subtitle_delay_ms")
     private val SUBTITLE_SPEED_KEY = intPreferencesKey("subtitle_speed_permille")
@@ -314,6 +319,22 @@ class SettingsRepository(private val context: Context) {
 
     val volumeBoostEnabled: Flow<Boolean> = context.dataStore.data
         .map { it[VOLUME_BOOST_KEY] ?: false }
+
+    /** Preferred audio track language; "" means "no preference" (NextPlayer default). */
+    val preferredAudioLanguage: Flow<String> = context.dataStore.data
+        .map { it[PREFERRED_AUDIO_LANGUAGE_KEY] ?: "" }
+
+    /** NextPlayer `requireAudioFocus` (default true). */
+    val requireAudioFocus: Flow<Boolean> = context.dataStore.data
+        .map { it[REQUIRE_AUDIO_FOCUS_KEY] ?: true }
+
+    /** NextPlayer `pauseOnHeadsetDisconnect` (default true). */
+    val pauseOnHeadsetDisconnect: Flow<Boolean> = context.dataStore.data
+        .map { it[PAUSE_ON_HEADSET_DISCONNECT_KEY] ?: true }
+
+    /** NextPlayer `showSystemVolumePanel` (default true). */
+    val showSystemVolumePanel: Flow<Boolean> = context.dataStore.data
+        .map { it[SYSTEM_VOLUME_PANEL_KEY] ?: true }
 
     val searchAutoKeyboard: Flow<Boolean> = context.dataStore.data
         .map { it[SEARCH_AUTO_KEYBOARD_KEY] ?: true }
@@ -499,6 +520,22 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
         context.dataStore.edit { it[VOLUME_BOOST_KEY] = enabled }
+    }
+
+    suspend fun setPreferredAudioLanguage(language: String) {
+        context.dataStore.edit { it[PREFERRED_AUDIO_LANGUAGE_KEY] = language }
+    }
+
+    suspend fun setRequireAudioFocus(enabled: Boolean) {
+        context.dataStore.edit { it[REQUIRE_AUDIO_FOCUS_KEY] = enabled }
+    }
+
+    suspend fun setPauseOnHeadsetDisconnect(enabled: Boolean) {
+        context.dataStore.edit { it[PAUSE_ON_HEADSET_DISCONNECT_KEY] = enabled }
+    }
+
+    suspend fun setShowSystemVolumePanel(enabled: Boolean) {
+        context.dataStore.edit { it[SYSTEM_VOLUME_PANEL_KEY] = enabled }
     }
 
     suspend fun setSearchAutoKeyboard(enabled: Boolean) {
