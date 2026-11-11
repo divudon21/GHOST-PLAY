@@ -5,6 +5,25 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.17
+
+### Interface
+- Home URL box replaced with NextPlayer's official **Network stream** card
+  (`NetworkStreamCard` + `NextOutlinedTextField`, ported verbatim from
+  `feature/network/.../NetworkScreen.kt`): bold title, description, shared
+  outlined text field and a trailing right-aligned `Button`. The bespoke
+  expressive field, chip row, morphing top-bar toggle and their helper imports
+  are removed, so the only feedback is Material 3's own ripple / focused outline.
+- The card renders as the first item of every Home layout (list, grid, compact,
+  cinema) and above the permission / empty states, so a stream link can be
+  played before local storage access is granted.
+- Home top bar keeps only the Search action.
+
+### Release notes
+- The static `### APKs` list is gone from the release body; the three assets are
+  attached to the release itself, so the notes now contain only the version
+  header, the updater metadata and the technical changelog.
+
 ## 3.16
 
 ### Updater
