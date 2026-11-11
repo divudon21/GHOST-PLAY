@@ -5,6 +5,25 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.19
+
+### Interface
+- Audio settings now holds NextPlayer's complete audio preference set, copied
+  from `AudioPreferencesScreen` + `AudioPreferencesViewModel`: **Preferred audio
+  language**, **Require audio focus**, **Pause on disconnect**, **System volume
+  panel** and **Volume boost**, with upstream titles, descriptions, icons,
+  ordering and defaults. The language list comes from `AudioLocales`
+  (`LocalesHelper` port: display name → ISO 639-2 code, "None" first).
+
+### Playback engine
+- Preferences are wired to the same Media3 APIs NextPlayer uses:
+  `DefaultTrackSelector.setPreferredAudioLanguage`, `AudioAttributes` +
+  `handleAudioFocus`, `setHandleAudioBecomingNoisy`, and the volume gesture now
+  passes `FLAG_SHOW_UI` only when the system-volume-panel preference is on and a
+  wired/USB/Bluetooth headset is connected (`VolumeState.isHeadsetOn` port).
+- `MusicService` applies the same three preferences live to the music player, so
+  audio settings are not video-only.
+
 ## 3.18
 
 ### Interface

@@ -49,6 +49,15 @@
     <string name="audio">Audio</string>
     <string name="volume_boost">Volume boost</string>
     <string name="volume_boost_desc">Boost audio volume up to 200%</string>
+    <string name="preferred_audio_lang">Preferred audio language</string>
+    <string name="preferred_audio_lang_description">Language of the audio track you want to use by default</string>
+    <string name="require_audio_focus">Require audio focus</string>
+    <string name="require_audio_focus_desc">Pause other players while this player is playing videos, and vice versa.</string>
+    <string name="pause_on_headset_disconnect">Pause on disconnect</string>
+    <string name="pause_on_headset_disconnect_desc">Pause playback when headset disconnected from the device</string>
+    <string name="system_volume_panel">System volume panel</string>
+    <string name="system_volume_panel_desc">Show system volume panel while adjusting volume with headset on</string>
+    <string name="audio_language_none">None</string>
     <string name="subtitle">Subtitle</string>
     <string name="system_caption_style">System caption style</string>
     <string name="system_caption_style_desc">Use the caption style configured in system captioning preferences</string>

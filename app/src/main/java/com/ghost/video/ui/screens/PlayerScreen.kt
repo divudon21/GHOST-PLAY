@@ -166,6 +166,13 @@ fun PlayerScreen(url: String) {
     val backgroundPlay by settingsRepository.backgroundPlay.collectAsState(initial = false)
     val playerOrientation by settingsRepository.playerOrientation.collectAsState(initial = OrientationPreference.AUTO)
     val systemCaptionStyle by settingsRepository.systemCaptionStyle.collectAsState(initial = false)
+    // NextPlayer audio preferences. These feed the player builder below, so they
+    // are part of the player's remember key (changing one rebuilds the player
+    // exactly like a decoder-priority change does).
+    val preferredAudioLanguage by settingsRepository.preferredAudioLanguage.collectAsState(initial = "")
+    val requireAudioFocus by settingsRepository.requireAudioFocus.collectAsState(initial = true)
+    val pauseOnHeadsetDisconnect by settingsRepository.pauseOnHeadsetDisconnect.collectAsState(initial = true)
+    val showSystemVolumePanel by settingsRepository.showSystemVolumePanel.collectAsState(initial = true)
 
     // Immersive Mode
     DisposableEffect(Unit) {
@@ -348,12 +355,20 @@ fun PlayerScreen(url: String) {
     var playbackError by remember { mutableStateOf<androidx.media3.common.PlaybackException?>(null) }
     var playbackFailure by remember { mutableStateOf<Throwable?>(null) }
     
-    val exoPlayer = remember(decoderPriority) {
+    val exoPlayer = remember(decoderPriority, requireAudioFocus, pauseOnHeadsetDisconnect, preferredAudioLanguage) {
         val extensionMode = when (decoderPriority) {
             DecoderPriority.PREFER_DEVICE -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
             DecoderPriority.PREFER_APP -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             DecoderPriority.DEVICE_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
         }
+        // Preferred audio language (NextPlayer: trackSelector parameters, ISO 639-2).
+        // An empty value means "no preference", which is what upstream sends too.
+        if (preferredAudioLanguage.isNotEmpty()) {
+            trackSelector.parameters = trackSelector.buildUponParameters()
+                .setPreferredAudioLanguage(preferredAudioLanguage)
+                .build()
+        }
+
         // Data source used by the media source AND by external subtitle sidecars, so
         // a subtitle loaded from the same place as the video keeps the same URI,
         // header and caching support.
@@ -392,9 +407,11 @@ fun PlayerScreen(url: String) {
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
                     .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
                     .build(),
-                /* handleAudioFocus = */ true,
+                /* handleAudioFocus = */ requireAudioFocus,
             )
-            .setHandleAudioBecomingNoisy(true)
+            // "Pause on disconnect" upstream maps straight onto Media3's
+            // becoming-noisy handling (headphones unplugged pauses playback).
+            .setHandleAudioBecomingNoisy(pauseOnHeadsetDisconnect)
             .build()
 
         // If the extension (software) renderers cannot be created on this device,
@@ -894,6 +911,7 @@ fun PlayerScreen(url: String) {
                         gestureBrightnessSensitivity = gestureBrightnessSensitivity,
                         gestureVolumeEnabled = gestureVolumeEnabled,
                         gestureVolumeSensitivity = gestureVolumeSensitivity,
+                        showSystemVolumePanel = showSystemVolumePanel,
                         gestureZoomEnabled = gestureZoomEnabled,
                         gesturePanEnabled = gesturePanEnabled,
                         gestureDoubleTapEnabled = gestureDoubleTapEnabled,
@@ -1187,6 +1205,22 @@ fun PlayerScreen(url: String) {
  * player has no selected track of that type. Pure function of the track list so it
  * can be called from the main thread without touching the player twice.
  */
+/**
+ * True when audio currently goes to a wired / USB / Bluetooth output.
+ *
+ * Ported from NextPlayer's `VolumeState.AudioManager.isHeadsetOn` (GPL-3.0):
+ * https://github.com/anilbeesetti/nextplayer/blob/main/feature/player/src/main/java/dev/anilbeesetti/nextplayer/feature/player/state/VolumeState.kt
+ */
+private fun android.media.AudioManager.isHeadsetOn(): Boolean =
+    getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any { device ->
+        device.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+            device.type == android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+            device.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+            device.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+                device.type == android.media.AudioDeviceInfo.TYPE_USB_HEADSET)
+    }
+
 internal fun selectedTrackId(tracks: Tracks, trackType: Int): String {
     for (group in tracks.groups) {
         if (group.type != trackType || !group.isSelected) continue
@@ -1295,6 +1329,8 @@ class PlayerGestureHandler(
     private val gestureBrightnessSensitivity: Float,
     private val gestureVolumeEnabled: Boolean,
     private val gestureVolumeSensitivity: Float,
+    /** "System volume panel" preference (NextPlayer `showSystemVolumePanel`). */
+    private val showSystemVolumePanel: Boolean,
     private val gestureZoomEnabled: Boolean,
     private val gesturePanEnabled: Boolean,
     private val gestureDoubleTapEnabled: Boolean,
@@ -1457,7 +1493,14 @@ class PlayerGestureHandler(
                         val sensMultiplier = gestureVolumeSensitivity * 1.5f
                         accumulatedVolume += (distanceY / surface.height) * maxVolume * sensMultiplier
                         val newVol = accumulatedVolume.coerceIn(0f, maxVolume.toFloat()).toInt()
-                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                        // "System volume panel": show the OS volume UI when a
+                        // headset is connected, matching NextPlayer's VolumeState.
+                        val showPanel = showSystemVolumePanel && audioManager.isHeadsetOn()
+                        audioManager.setStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            newVol,
+                            if (showPanel) AudioManager.FLAG_SHOW_UI else 0,
+                        )
                         
                         onVolumeChanged(((newVol.toFloat() / maxVolume) * 100).toInt(), ++volumeTriggerCount)
                         return true
