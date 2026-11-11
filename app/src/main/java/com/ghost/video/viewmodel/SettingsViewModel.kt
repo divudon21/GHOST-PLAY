@@ -270,6 +270,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = false
         )
 
+    // Null until DataStore has loaded, to avoid opening the keyboard for a saved off setting.
+    val searchAutoKeyboard: StateFlow<Boolean?> = repository.searchAutoKeyboard
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     val highContrastDark: StateFlow<Boolean> = repository.highContrastDark
         .stateIn(
             scope = viewModelScope,
@@ -412,6 +416,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setDialogTheme(theme: DialogThemePreference) {
         viewModelScope.launch { repository.setDialogTheme(theme) }
+    }
+
+    fun setSearchAutoKeyboard(enabled: Boolean) {
+        viewModelScope.launch { repository.setSearchAutoKeyboard(enabled) }
     }
 
     fun setVolumeBoostEnabled(enabled: Boolean) {

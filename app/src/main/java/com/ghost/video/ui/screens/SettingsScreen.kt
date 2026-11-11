@@ -49,6 +49,7 @@ fun SettingsScreen(
     onNavigateToDecoder: () -> Unit = {},
     onNavigateToAudio: () -> Unit = {},
     onNavigateToSubtitle: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
     onNavigateToGeneral: () -> Unit = {},
     onNavigateToUpdates: () -> Unit = {},
     onSwipeNext: () -> Unit = {},
@@ -98,6 +99,12 @@ fun SettingsScreen(
             subtitle = "Subtitle appearance, playback options",
             icon = NextIcons.Subtitle,
             onClick = onNavigateToSubtitle
+        ),
+        SettingsCategory(
+            title = "Search",
+            subtitle = "Search keyboard options",
+            icon = NextIcons.Search,
+            onClick = onNavigateToSearch
         ),
         SettingsCategory(
             title = "Thumbnail generation",
