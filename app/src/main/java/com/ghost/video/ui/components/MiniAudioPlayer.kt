@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -409,8 +410,8 @@ private fun Modifier.miniPlayerGestures(
 }
 
 /** Loads a hairline border on a thumbnail, light or dark with the theme. */
-private fun Modifier.thumbnailBorder(shape: androidx.compose.ui.graphics.Shape): Modifier =
-    this.border(
+private fun Modifier.thumbnailBorder(shape: androidx.compose.ui.graphics.Shape): Modifier = this.composed {
+    border(
         width = 1.dp,
         color = if (androidx.compose.foundation.isSystemInDarkTheme()) {
             Color.White.copy(alpha = 0.15f)
@@ -419,6 +420,7 @@ private fun Modifier.thumbnailBorder(shape: androidx.compose.ui.graphics.Shape):
         },
         shape = shape,
     )
+}
 
 /**
  * The bar's margin at either side of the screen.
