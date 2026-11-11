@@ -43,12 +43,14 @@ section in **Settings → Updates** and in the "update available" dialog.
 - `miniPlayerGestures`: one gesture detector for both drags — sideways past 72dp
   changes track, an upward pull raises the bar at half the finger's rate and
   slows with distance (`pullLift`), then springs home at 0.65 damping as the
-  player opens. `PULL_BIAS` 1.5 keeps an arcing thumb from being read as a
-  sideways swipe.
+  player opens, while a downward drag of the same distance puts the bar away.
+  `PULL_BIAS` 1.5 keeps an arcing thumb from being read as a sideways swipe.
 - The bar and the tab bar are now drawn over the pages instead of inside a
   Scaffold bottom slot, and the bar is placed against the tab bar's own measured
-  top. Nothing reserves a strip: no container colour above, below or beside
-  either pill.
+  top — measured through the bar, since the wrapper around it does not contain
+  the bar's own height or its navigation-bar inset. Nothing reserves a strip: no
+  container colour above, below or beside either pill, and no gap between the
+  bottom of the page and the pill floating over it.
 
 ## 3.20
 
