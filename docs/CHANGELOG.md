@@ -5,6 +5,51 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.21
+
+### Interface
+- The full audio player is rebuilt from BitChord's own player code rather than
+  from a sketch of it. Ported file by file from `kushagrasinghx/BitChord`:
+  - `ui/player/ArtworkMeshBackdrop.kt` → `ui/player/ArtworkMesh.kt`: the sleeve's
+    own colours, averaged into a 6×6 mesh, flipped and rotated below the seam,
+    resampled to 32×32, blurred with three box passes, and crossfaded over 900 ms
+    when the track changes. The seam is the sleeve's bottom edge, held from there
+    up, so the backdrop continues out of the artwork instead of starting behind
+    it.
+  - `ui/player/ThinSlider.kt` → `ui/player/ThinSlider.kt`: the hairline capsule
+    with no thumb that thickens under the finger, plus the travelling sheen that
+    claims the bar while a seek is being resolved.
+  - `ui/player/PlayerControls.kt` → `ui/player/PlayerControls.kt`:
+    `PlayerScrubber` (elapsed at the start, remaining at the end, both on the
+    scrubber's own lift), `TransportRow` (SpaceAround, skip glyphs squashed to
+    0.85, faded rather than hidden at the ends of a queue, spinner in the play
+    target while loading) and the fading credits line.
+  - `ui/graphics/FadeCurve.kt` + `FadingEdges.kt` → the same files: smootherstep
+    edge fades, so a long title runs out instead of ending in an ellipsis.
+  - `NowPlayingScreen.kt`'s measurements: 30dp gutter, a 560dp maximum width
+    that centres itself on a tablet, the sleeve bounded by whichever axis runs
+    out first, the artwork-and-credits block centred above a control deck pinned
+    to the foot, and the 32dp pull-down handle strip.
+- Motion comes from `app/.../player/PlayerSheetMotion.kt`: a critically damped
+  spring at stiffness 195 with a 0.5px settle threshold, so the player closes on
+  the same curve Apple Music's sheet does.
+
+### Mini player
+- Rebuilt on `ui/components/MiniPlayer.kt`'s figures: a 56dp pill (8dp row
+  padding around a 40dp cover at 8dp corner), 12dp horizontal padding because a
+  pill's ends curve away under the cover, a 40dp glyph slot with the glyph drawn
+  inside it so the bar's height never depends on the glyph, a hairline cover
+  border, and edge-fading title and artist lines.
+- `miniPlayerGestures`: one gesture detector for both drags — sideways past 72dp
+  changes track, an upward pull raises the bar at half the finger's rate and
+  slows with distance (`pullLift`), then springs home at 0.65 damping as the
+  player opens. `PULL_BIAS` 1.5 keeps an arcing thumb from being read as a
+  sideways swipe.
+- The bar and the tab bar are now drawn over the pages instead of inside a
+  Scaffold bottom slot, and the bar is placed against the tab bar's own measured
+  top. Nothing reserves a strip: no container colour above, below or beside
+  either pill.
+
 ## 3.20
 
 ### Interface

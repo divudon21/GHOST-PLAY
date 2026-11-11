@@ -8,6 +8,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -46,8 +48,27 @@ fun NextNavigationBar(
     destinations: List<GhostTopLevelDestination> = GhostTopLevelDestination.entries,
     isSelected: (GhostTopLevelDestination) -> Boolean,
     onDestinationClick: (GhostTopLevelDestination) -> Unit,
+    modifier: Modifier = Modifier,
+    /**
+     * The bar's top edge in the stack it is drawn in, in pixels, or null once it
+     * leaves.
+     *
+     * The mini player rides on the bar rather than above a reserved strip, so it
+     * has to be told where the bar's top actually is: the bar carries the
+     * navigation-bar inset itself, and that inset is different in portrait, in
+     * landscape and on a device without one at all.
+     */
+    onTopPositioned: ((Int?) -> Unit)? = null,
 ) {
-    NavigationBar {
+    NavigationBar(
+        modifier = if (onTopPositioned == null) {
+            modifier
+        } else {
+            modifier.onGloballyPositioned { coordinates ->
+                onTopPositioned(coordinates.positionInParent().y.toInt())
+            }
+        },
+    ) {
         destinations.forEach { destination ->
             NavigationBarItem(
                 selected = isSelected(destination),
