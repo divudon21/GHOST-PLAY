@@ -64,10 +64,16 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.DefaultExtractorsFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegSubtitleExtractorsFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.withFfmpegSubtitles
+import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleDelayMilliseconds
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -329,19 +335,32 @@ fun PlayerScreen(url: String) {
             DecoderPriority.PREFER_APP -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             DecoderPriority.DEVICE_ONLY -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
         }
-        val extractorsFactory = DefaultExtractorsFactory()
+        // Data source used by the media source AND by external subtitle sidecars, so
+        // a subtitle loaded from the same place as the video keeps the same URI,
+        // header and caching support.
+        val dataSourceFactory = DefaultDataSource.Factory(context)
+        // FfmpegSubtitleExtractorsFactory keeps standard Media3 parsing for SRT,
+        // WebVTT and TTML while routing ASS/SSA (libass), PGS, VobSub and DVB through
+        // the bundled FFmpeg decoders, and it extracts fonts attached to Matroska.
+        val extractorsFactory = FfmpegSubtitleExtractorsFactory(DefaultExtractorsFactory())
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
+            .setDataSourceFactory(dataSourceFactory)
+            .withFfmpegSubtitles(dataSourceFactory)
 
-        // Standard ExoPlayer setup (same as NextPlayer): renderers factory with
-        // the chosen extension mode, an explicit media audio focus request, and
-        // no custom audio processors in the pipeline.
+        // NextPlayer's player stack: NextRenderersFactory adds FFmpeg software
+        // decoders (H.264, HEVC, VP8, VP9, AV1 via dav1d, plus AAC/AC3/E-AC3/DTS/
+        // TrueHD/FLAC/ALAC/Opus/Vorbis audio) behind the device's own MediaCodec
+        // decoders, so files the phone cannot decode in hardware still play.
+        // Decoder fallback is enabled as well, so a faulty MediaCodec decoder
+        // hands the track to the next candidate instead of failing the video.
         fun buildPlayer(mode: Int): ExoPlayer = ExoPlayer.Builder(context)
             .setRenderersFactory(
-                DefaultRenderersFactory(context).setExtensionRendererMode(mode)
+                NextRenderersFactory(context)
+                    .setExtensionRendererMode(mode)
+                    .setEnableDecoderFallback(true)
             )
             .setTrackSelector(trackSelector)
-            .setMediaSourceFactory(
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory)
-            )
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
