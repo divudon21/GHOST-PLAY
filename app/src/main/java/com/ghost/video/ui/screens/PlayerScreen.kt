@@ -58,7 +58,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
-import androidx.media3.ui.CustomLayout
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -751,32 +750,30 @@ fun PlayerScreen(url: String) {
                     setShowNextButton(false)
                     setShowPreviousButton(false)
 
-                    // The mute control, as a Media3 custom layout placed after the
-                    // settings button on that row. [C.LAYOUT_DISABLED] is the
-                    // default slot's "no icon" id — a custom layout supplies its
-                    // own drawing, so it must not ask to replace a named icon.
-                    //
-                    // It is a media3 custom layout rather than a view added to
-                    // exo_basic_controls by hand because its glyph is a composable
-                    // reading [isMuted]: the icon redraws itself when the volume
-                    // changes, where the old ImageView only knew what it had last
-                    // been told.
-                    setCustomLayout(
-                        context,
-                        layoutId = 0,
-                        listOf(
-                            CustomLayout(
-                                CustomLayout.LayoutParams(
-                                    CustomLayout.SLOT_INDEX_DEFAULT,
-                                    C.LAYOUT_DISABLED,
-                                ),
-                                PlayerMuteButton(
-                                    muted = isMuted,
-                                    onToggle = toggleMute,
-                                ),
-                            ),
-                        ),
-                    )
+                    // The mute control, stamped into the control row like the rest
+                    // of this screen's buttons — Media3's own custom-layout API is
+                    // not callable from a View factory, so the icon is drawn here
+                    // with a ComposeView and given its own recomposer: that is what
+                    // lets the glyph follow the player's volume rather than a
+                    // remembered flag.
+                    val muteHost = androidx.compose.ui.platform.ComposeView(ctx).apply {
+                        setViewCompositionStrategy(
+                            androidx.compose.ui.platform.ViewCompositionStrategy
+                                .DisposeOnViewTreeLifecycleDestroyed
+                        )
+                        setContent {
+                            val muted = isMuted
+                            PlayerMuteButton(
+                                muted = muted,
+                                onToggle = toggleMute,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.MATCH_PARENT
+                        )
+                    }
 
                     playerViewRef = this
                     
@@ -941,7 +938,8 @@ fun PlayerScreen(url: String) {
                         basicControls.addView(ccButton, insertIndex + 3)
                         basicControls.addView(audioButton, insertIndex + 4)
                         basicControls.addView(audioAdjustButton, insertIndex + 5)
-                        basicControls.addView(qualityButton, insertIndex + 6)
+                        basicControls.addView(muteHost, insertIndex + 6)
+                        basicControls.addView(qualityButton, insertIndex + 7)
                     }
                     
                     // Gesture handling - Using a wrapper class to properly handle lock state
@@ -1237,7 +1235,6 @@ fun PlayerScreen(url: String) {
                 showAspectRatioDialog = false
             },
             onDismiss = { showAspectRatioDialog = false },
-            dialogColors = dialogColors
         )
     }
 }
@@ -1764,6 +1761,39 @@ fun TrackSelectionSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(8.dp),
             )
+        }
+    }
+}
+
+@Composable
+fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(animationSpec = tween(200)) +
+            slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(300)) +
+            slideOutVertically(targetOffsetY = { -50 }, animationSpec = tween(300)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 64.dp)
+                    .background(Color.Black.copy(alpha = 0.7f), shape = MaterialTheme.shapes.large)
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                Text(
+                    text = text,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
         }
     }
 }
