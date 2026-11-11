@@ -5,17 +5,28 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.16
+
+### Updater
+- Release notes are now generated from the curated technical changelog
+  (`docs/CHANGELOG.md`, section of the released version) instead of a raw commit
+  list, so the GitHub release describes real changes rather than README and
+  asset commits. The commit-grouped generator remains as the fallback for
+  versions without a curated entry, and now ignores documentation-only commits.
+
 ## 3.15
 
 ### Playback engine
-- AVFoundation-style container fallback: an unplayable container no longer ends
-  with a black screen — the failure surface reports the extractor, codec and URI
-  that failed, and playback can be retried or handed to another app.
+- No player or decoder changes in this release; the Media3 1.11.1 stack, FFmpeg
+  software decoders and native subtitle rendering from 3.13 are unchanged.
 
 ### Interface
-- New music mini player: Material 3 Expressive surface (dynamic container
-  colour, spring press morph, animated album art), seekable wavy progress line,
-  swipe-up / tap to open the full player, swipe-down to dismiss.
+- New music mini player (`MiniAudioPlayer`): Material 3 Expressive spring
+  motion, album art with playing overlay, spring press-scale transport controls,
+  animated progress line, drag-follow gesture — swipe up or tap to open the full
+  player, swipe down to dismiss.
+- Album art is decoded once per track through a shared `MusicArtworkLoader`
+  memoised in `ThumbnailCache`.
 
 ### Updater
 - Release notes are generated per tag from the commit range and grouped into
