@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghost.video.R
 import com.ghost.video.data.DecoderPriority
+import com.ghost.video.ui.components.ExpandingPreferenceItem
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
@@ -80,28 +81,24 @@ fun DecoderSettingsScreen(
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                PreferenceItem(
+                ExpandingPreferenceItem(
                     title = stringResource(id = R.string.decoder),
                     description = currentPriority.label(),
                     icon = NextIcons.Decoder,
-                    enabled = true,
-                    onClick = { expanded = !expanded },
+                    expanded = expanded,
+                    onToggle = { expanded = !expanded },
                     isFirstItem = true,
                     isLastItem = true,
-                )
-
-                AnimatedVisibility(visible = expanded) {
-                    InlineOptionGroup {
-                        DecoderPriority.entries.forEach { priority ->
-                            RadioTextButton(
-                                text = priority.label(),
-                                selected = priority == currentPriority,
-                                onClick = {
-                                    viewModel.setDecoderPriority(priority)
-                                    expanded = false
-                                },
-                            )
-                        }
+                ) {
+                    DecoderPriority.entries.forEach { priority ->
+                        RadioTextButton(
+                            text = priority.label(),
+                            selected = priority == currentPriority,
+                            onClick = {
+                                viewModel.setDecoderPriority(priority)
+                                expanded = false
+                            },
+                        )
                     }
                 }
             }

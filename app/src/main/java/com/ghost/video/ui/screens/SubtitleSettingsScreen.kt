@@ -30,6 +30,7 @@ import com.ghost.video.data.MAX_SUBTITLE_SPEED
 import com.ghost.video.data.MIN_SUBTITLE_DELAY
 import com.ghost.video.data.MIN_SUBTITLE_SPEED
 import com.ghost.video.data.SubtitleFont
+import com.ghost.video.ui.components.ExpandingPreferenceItem
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
@@ -101,26 +102,22 @@ fun SubtitleSettingsScreen(
                     onClick = { viewModel.setSystemCaptionStyle(!systemCaptionStyle) },
                     isFirstItem = true,
                 )
-                PreferenceItem(
+                ExpandingPreferenceItem(
                     title = stringResource(id = R.string.subtitle_font),
                     description = currentFont.label(),
                     icon = NextIcons.Font,
-                    enabled = true,
-                    onClick = { fontExpanded = !fontExpanded },
-                )
-
-                AnimatedVisibility(visible = fontExpanded) {
-                    InlineOptionGroup {
-                        SubtitleFont.entries.forEach { font ->
-                            RadioTextButton(
-                                text = font.label(),
-                                selected = font == currentFont,
-                                onClick = {
-                                    viewModel.setSubtitleFont(font)
-                                    fontExpanded = false
-                                },
-                            )
-                        }
+                    expanded = fontExpanded,
+                    onToggle = { fontExpanded = !fontExpanded },
+                ) {
+                    SubtitleFont.entries.forEach { font ->
+                        RadioTextButton(
+                            text = font.label(),
+                            selected = font == currentFont,
+                            onClick = {
+                                viewModel.setSubtitleFont(font)
+                                fontExpanded = false
+                            },
+                        )
                     }
                 }
                 PreferenceSwitch(

@@ -5,6 +5,20 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.24 (beta)
+
+### Interface
+- Every expanding preference is now the same row. **Subtitle font**, **Decoder**
+  and **Player screen orientation** join **Preferred audio language**: one
+  `ExpandingPreferenceItem`, with a chevron that turns over while its list is
+  open, and the options opening directly beneath the row that owns them rather
+  than at the foot of the page. Extracted from the audio-language row, which is
+  where the shape was first got right, so there is one implementation instead of
+  four.
+- This build is published as a **pre-release**: tagged `v3.24-beta`, marked
+  pre-release on GitHub, and therefore labelled `Beta` in the updater and offered
+  only to people who have turned beta builds on.
+
 ## 3.23
 
 ### Fixed
