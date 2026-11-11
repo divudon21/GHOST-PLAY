@@ -40,6 +40,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,6 +72,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
@@ -94,6 +96,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -314,6 +318,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Where the mini player sits when there is no tab bar to ride on — which is any
+ * page deep enough that the bar has slid away. Its pill plus the gap it keeps
+ * above the bar, above the navigation-bar inset the bar would have carried.
+ */
+private val MINI_PLAYER_RESTING_BOTTOM = 96.dp
+
 @Composable
 fun MainApp(
     audioViewModel: AudioViewModel = viewModel(),
@@ -364,95 +375,36 @@ fun MainApp(
         }
     }
 
+    // ---- The bottom stack ----
+    // The mini player and the tab bar are one stack of floating pills, so they
+    // share a slot and a gutter: the bar sits directly above the tabs, at the
+    // tabs' own side margin. Both are drawn over the pages rather than in a
+    // Scaffold bottom slot, so neither of them claims a strip of the screen when
+    // it appears — there is nothing between them and the page behind.
+    val currentAudio by audioViewModel.currentAudio.collectAsState()
+    val isPlaying by audioViewModel.isPlaying.collectAsState()
+    val miniPlayerAudio = currentAudio
+    val showMiniPlayer = miniPlayerAudio != null &&
+            currentRoute != "player/{url}" &&
+            currentRoute != "audio_player"
+    val showNavBar = currentRoute in showBottomNavRoutes
+
+    // Where the tab bar's top is, in window pixels, and the same for this
+    // composable's own root — the difference between them is how far the bar's
+    // top sits above the stack's bottom edge. Measured rather than assumed: the
+    // bar carries the navigation-bar inset itself, which differs between
+    // portrait, landscape and a device with no inset at all.
+    val density = LocalDensity.current
+    var navBarTopRootPx by remember { mutableIntStateOf(0) }
+    var rootTopPx by remember { mutableIntStateOf(0) }
+    var rootHeightPx by remember { mutableIntStateOf(0) }
+    val restingBottomPx = with(density) { MINI_PLAYER_RESTING_BOTTOM.roundToPx() }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        // The mini player sits on a pill-shaped surface of its own, so the area
-        // around it must show the page behind it - not a container colour of its
-        // own that reads as a black band above and below the bar.
+        // Nothing of the Scaffold's own is ever visible: the pages and the two
+        // floating pills are all of it, and anything else would be a band.
         containerColor = Color.Transparent,
-        bottomBar = { 
-            Column {
-                // Compact mini audio player.
-                val currentAudio by audioViewModel.currentAudio.collectAsState()
-                val isPlaying by audioViewModel.isPlaying.collectAsState()
-                val miniPlayerAudio = currentAudio
-
-                val showMiniPlayer = miniPlayerAudio != null &&
-                        currentRoute != "player/{url}" &&
-                        currentRoute != "audio_player"
-
-                // Expressive mini player: swipe up (or tap) to open the full
-                // audio player, swipe down to dismiss, spring press feedback on
-                // every control. Motion lives in MiniAudioPlayer so the bottom bar
-                // stays a layout container.
-                AnimatedVisibility(
-                    visible = showMiniPlayer && miniPlayerAudio != null,
-                    enter = com.ghost.video.ui.components.miniPlayerEnter(),
-                    exit = com.ghost.video.ui.components.miniPlayerExit(),
-                ) {
-                    if (miniPlayerAudio != null) {
-                        val artwork = com.ghost.video.ui.components.rememberMiniPlayerArtwork(miniPlayerAudio.uri)
-                        val progress = remember(miniPlayerAudio.uri, isPlaying) {
-                            mutableFloatStateOf(0f)
-                        }
-                        // Lightweight position poll: 1 Hz while playing, one read
-                        // when paused. No ExoPlayer listener plumbing needed for a
-                        // 3 dp progress line.
-                        LaunchedEffect(miniPlayerAudio.uri, isPlaying) {
-                            progress.floatValue = runCatching {
-                                val duration = audioViewModel.getDuration()
-                                if (duration > 0) {
-                                    audioViewModel.getCurrentPosition().toFloat() / duration
-                                } else 0f
-                            }.getOrDefault(0f)
-                            while (isPlaying) {
-                                delay(1000)
-                                progress.floatValue = runCatching {
-                                    val duration = audioViewModel.getDuration()
-                                    if (duration > 0) {
-                                        audioViewModel.getCurrentPosition().toFloat() / duration
-                                    } else 0f
-                                }.getOrDefault(progress.floatValue)
-                            }
-                        }
-                        com.ghost.video.ui.components.MiniAudioPlayer(
-                            title = miniPlayerAudio.name,
-                            artist = miniPlayerAudio.artist,
-                            isPlaying = isPlaying,
-                            progress = progress.floatValue,
-                            artwork = artwork,
-                            onOpen = {
-                                navController.navigate("audio_player") { launchSingleTop = true }
-                            },
-                            onTogglePlayPause = { audioViewModel.togglePlayPause() },
-                            onPrevious = { audioViewModel.skipToPrevious() },
-                            onNext = { audioViewModel.skipToNext() },
-                            onDismiss = { audioViewModel.stop(context) },
-                        )
-                    }
-                }
-
-                // Slide + fade the bottom nav in/out when moving between the tab
-                // screens and the deeper pages. A hard cut here is what makes Back
-                // feel like a jump instead of a smooth return.
-                AnimatedVisibility(
-                    visible = currentRoute in showBottomNavRoutes,
-                    enter = slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = tween(NAV_DURATION, easing = LinearEasing)
-                    ) + fadeIn(animationSpec = navAlphaTween()),
-                    exit = slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = tween(NAV_DURATION, easing = LinearEasing)
-                    ) + fadeOut(animationSpec = navAlphaTween()),
-                ) {
-                    NextNavigationBar(
-                        isSelected = { destination -> destination.route == currentRoute },
-                        onDestinationClick = { destination -> selectTab(destination) },
-                    )
-                }
-            }
-        },
     ) { innerPadding ->
         // Instant padding (no animation): animating the padding re-laid-out the
         // whole content every frame, which caused jitter on the heavy video grid.
@@ -466,6 +418,10 @@ fun MainApp(
         val edgeToEdgeTop = currentRoute == "settings" || currentRoute == "home" ||
             currentRoute == "audio" || currentRoute == "search"
         val layoutDirection = LocalLayoutDirection.current
+        // The pages, with the two floating pills over them. Nothing here claims
+        // a strip of the screen for the pills: the pages run to the bottom edge
+        // and the pills float on top of whatever is there.
+        Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = "home",
@@ -705,6 +661,109 @@ fun MainApp(
                 val url = backStackEntry.arguments?.getString("url") ?: ""
                 PlayerScreen(url = normalizeRouteUrl(url))
             }
+        }
+
+        // ---- The floating pills ----
+        // A Box rather than a Column: the mini player is placed against the tab
+        // bar's own measured top, so it can overlap the bar's row outright. Side
+        // by side in a Column, the bar's 80dp band and the 56dp bar added up to
+        // a strip of empty backdrop behind them, which is exactly the band the
+        // player must not have.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coordinates ->
+                    rootTopPx = coordinates.positionInRoot().y.roundToInt()
+                    rootHeightPx = coordinates.size.height
+                },
+        ) {
+            // The tab bar, slid in and out rather than cut: a hard cut is what
+            // makes Back feel like a jump instead of a smooth return.
+            AnimatedVisibility(
+                visible = showNavBar,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(NAV_DURATION, easing = LinearEasing)
+                ) + fadeIn(animationSpec = navAlphaTween()),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(NAV_DURATION, easing = LinearEasing)
+                ) + fadeOut(animationSpec = navAlphaTween()),
+            ) {
+                NextNavigationBar(
+                    isSelected = { destination -> destination.route == currentRoute },
+                    onDestinationClick = { destination -> selectTab(destination) },
+                    onTopPositioned = { top ->
+                        // The bar is measured whether or not it is meant to be
+                        // seen — AnimatedVisibility keeps it composed through its
+                        // exit — so the probe reads where it *is*, never whether
+                        // it is up. [showNavBar] decides that.
+                        top?.let { navBarTopRootPx = it }
+                    },
+                )
+            }
+
+            AnimatedVisibility(
+                visible = showMiniPlayer && miniPlayerAudio != null,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = com.ghost.video.ui.components.miniPlayerEnter(),
+                exit = com.ghost.video.ui.components.miniPlayerExit(),
+            ) {
+                if (miniPlayerAudio != null) {
+                    val artwork = com.ghost.video.ui.components.rememberMiniPlayerArtwork(miniPlayerAudio.uri)
+                    val progress = remember(miniPlayerAudio.uri, isPlaying) { mutableFloatStateOf(0f) }
+                    // Lightweight position poll: 1 Hz while playing, one read
+                    // when paused. No ExoPlayer listener plumbing needed for a
+                    // 2dp progress line.
+                    LaunchedEffect(miniPlayerAudio.uri, isPlaying) {
+                        progress.floatValue = runCatching {
+                            val duration = audioViewModel.getDuration()
+                            if (duration > 0) {
+                                audioViewModel.getCurrentPosition().toFloat() / duration
+                            } else 0f
+                        }.getOrDefault(0f)
+                        while (isPlaying) {
+                            delay(1000)
+                            progress.floatValue = runCatching {
+                                val duration = audioViewModel.getDuration()
+                                if (duration > 0) {
+                                    audioViewModel.getCurrentPosition().toFloat() / duration
+                                } else 0f
+                            }.getOrDefault(progress.floatValue)
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .offset {
+                                // Above the tab bar's top when it is up, and above
+                                // the navigation-bar inset when it is not — so the
+                                // bar never lands on a reserved strip.
+                                val inset = if (showNavBar && navBarTopRootPx > 0) {
+                                    (rootTopPx + rootHeightPx - navBarTopRootPx).coerceAtLeast(0)
+                                } else {
+                                    restingBottomPx
+                                }
+                                IntOffset(0, -inset)
+                            },
+                    ) {
+                        com.ghost.video.ui.components.MiniAudioPlayer(
+                            title = miniPlayerAudio.name,
+                            artist = miniPlayerAudio.artist,
+                            isPlaying = isPlaying,
+                            progress = progress.floatValue,
+                            artwork = artwork,
+                            onOpen = { navController.navigate("audio_player") { launchSingleTop = true } },
+                            onTogglePlayPause = { audioViewModel.togglePlayPause() },
+                            onPrevious = { audioViewModel.skipToPrevious() },
+                            onNext = { audioViewModel.skipToNext() },
+                            onDismiss = { audioViewModel.stop(context) },
+                        )
+                    }
+                }
+            }
+        }
         }
     }
 }
