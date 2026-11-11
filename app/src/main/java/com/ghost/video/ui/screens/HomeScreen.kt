@@ -204,11 +204,13 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_fireplay),
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo),
                             contentDescription = null,
-                            modifier = Modifier.size(30.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
                         )
                         Text(
                             text = "Ghost Play",
