@@ -24,6 +24,7 @@ import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.components.ClickablePreferenceItem
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.tabSwipe
 import com.ghost.video.viewmodel.SettingsViewModel
 
@@ -158,7 +159,8 @@ fun SettingsScreen(
                 .verticalScroll(state = scrollState)
                 .padding(paddingValues = innerPadding)
                 .padding(horizontal = 16.dp)
-                .padding(vertical = 16.dp),
+                .padding(top = 16.dp)
+                .padding(bottom = tabBarClearance()),
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
             categories.forEachIndexed { index, category ->

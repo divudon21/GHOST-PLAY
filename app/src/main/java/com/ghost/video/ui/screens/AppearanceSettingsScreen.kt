@@ -50,6 +50,7 @@ import com.ghost.video.R
 import com.ghost.video.data.AppColor
 import com.ghost.video.data.AppTextStyle
 import com.ghost.video.data.ThemePreference
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.InlineOptionGroup
 import com.ghost.video.ui.components.ListSectionTitle
 import com.ghost.video.ui.components.NextIcons
@@ -148,7 +149,8 @@ private fun AppearanceSettingsScreenContent(
                 .fillMaxSize()
                 .verticalScroll(state = rememberScrollState())
                 .padding(paddingValues = innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = tabBarClearance()),
         ) {
             ListSectionTitle(text = stringResource(id = R.string.appearance_name))
             Column(

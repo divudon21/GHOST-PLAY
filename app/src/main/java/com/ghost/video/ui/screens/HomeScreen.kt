@@ -76,6 +76,7 @@ import com.ghost.video.data.SettingsRepository
 import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ViewLayout
 import com.ghost.video.data.VideoThumbnailPipeline
+import com.ghost.video.ui.components.tabBarClearance
 import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.ui.components.NetworkStreamCard
 import com.ghost.video.ui.components.NextTopAppBar
@@ -364,7 +365,10 @@ fun HomeScreen(
                 ViewLayout.LIST -> {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp),
+                        contentPadding = PaddingValues(
+                            top = 4.dp,
+                            bottom = 4.dp + tabBarClearance(),
+                        ),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(filteredVideos, key = { it.uri }) { video ->
@@ -382,6 +386,7 @@ fun HomeScreen(
                 ViewLayout.GRID -> {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(bottom = tabBarClearance()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -402,6 +407,7 @@ fun HomeScreen(
                     // artwork, avoiding cramped metadata below each tiny card.
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
+                        contentPadding = PaddingValues(bottom = tabBarClearance()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -423,6 +429,7 @@ fun HomeScreen(
                     // width as a hero card, the rest fill a 2-column grid below.
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(bottom = tabBarClearance()),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
