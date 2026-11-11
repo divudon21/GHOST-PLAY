@@ -102,7 +102,7 @@
     <string name="updates_error_title">Could not check for updates</string>
     <string name="updates_up_to_date">You’re up to date</string>
     <string name="updates_available">Update available</string>
-    <string name="updates_whats_new">What's new</string>
+    <string name="updates_whats_new">What\'s new</string>
     <string name="updates_update">Update</string>
     <string name="updates_signing_key_warning">This release has a different signing key. Android may require uninstalling the current app first, which removes its local settings.</string>
     <string name="updates_section_preferences">Preferences</string>
