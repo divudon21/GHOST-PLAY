@@ -1829,6 +1829,11 @@ fun AspectRatioSheet(
     }
 }
 
+data class AspectRatioOption(
+    val label: String,
+    val value: Int,
+)
+
 private fun applySubtitleStyle(
     subtitleView: SubtitleView,
     context: Context,
