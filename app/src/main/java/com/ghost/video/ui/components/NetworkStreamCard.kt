@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -29,16 +28,19 @@ import androidx.compose.ui.unit.dp
  * Source (GPL-3.0):
  * https://github.com/anilbeesetti/nextplayer/blob/main/feature/network/src/main/java/dev/anilbeesetti/nextplayer/feature/network/screens/list/NetworkScreen.kt
  *
- * `NetworkStreamCard`: a rounded surface at 1 dp elevation holding a bold title,
- * a short description, the shared outlined text field and a trailing
- * right-aligned `Button`. No bespoke animation, no chip row, no trailing icon
- * cluster — the platform ripple is the only feedback, exactly as upstream.
+ * `NetworkStreamCard`: a rounded surface at 1 dp elevation holding the shared
+ * outlined text field and a trailing right-aligned `Button`. No bespoke
+ * animation, no chip row, no trailing icon cluster — the platform ripple is the
+ * only feedback, exactly as upstream.
+ *
+ * Two deliberate departures, requested by the app owner: the title and
+ * description rows are not drawn (the card only appears after the link button is
+ * tapped), and the whole card is revealed with `AnimatedVisibility` rather than
+ * being permanently on screen.
  */
 @Composable
 fun NetworkStreamCard(
     modifier: Modifier = Modifier,
-    title: String,
-    description: String,
     placeholder: String,
     actionLabel: String,
     url: String,
@@ -55,16 +57,9 @@ fun NetworkStreamCard(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // Title and description are intentionally not rendered: the card is only
+        // shown after the user taps the link button, so the heading explained
+        // itself twice.
         NextOutlinedTextField(
             value = url,
             onValueChange = onUrlChange,
