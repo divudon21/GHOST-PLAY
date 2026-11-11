@@ -366,6 +366,10 @@ fun MainApp(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        // The mini player sits on a pill-shaped surface of its own, so the area
+        // around it must show the page behind it - not a container colour of its
+        // own that reads as a black band above and below the bar.
+        containerColor = Color.Transparent,
         bottomBar = { 
             Column {
                 // Compact mini audio player.
