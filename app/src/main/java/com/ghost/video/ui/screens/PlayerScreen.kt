@@ -65,6 +65,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -329,6 +330,19 @@ fun PlayerScreen(url: String) {
         DefaultTrackSelector(context)
     }
 
+    // One OkHttp client for every network read on this screen: media requests and
+    // subtitle sidecars. Built lazily and kept for the lifetime of the player.
+    val okHttpClient = remember {
+        okhttp3.OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            // Streams can pause for a long time; a read timeout would kill playback.
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
     // Playback diagnostics. A decode/container/URI failure used to leave a black
     // screen with no sound and no explanation; now it is shown and copyable.
     var playbackError by remember { mutableStateOf<androidx.media3.common.PlaybackException?>(null) }
@@ -343,7 +357,14 @@ fun PlayerScreen(url: String) {
         // Data source used by the media source AND by external subtitle sidecars, so
         // a subtitle loaded from the same place as the video keeps the same URI,
         // header and caching support.
-        val dataSourceFactory = DefaultDataSource.Factory(context)
+        val dataSourceFactory = DefaultDataSource.Factory(
+            context,
+            // OkHttp instead of the platform HTTP stack: HTTP/2, gzip and the
+            // redirect/TLS handling that many streaming hosts require. Reads of
+            // local files and content:// URIs are unaffected - DefaultDataSource
+            // only hands http(s) URIs to this factory.
+            OkHttpDataSource.Factory(okHttpClient)
+        )
         // FfmpegSubtitleExtractorsFactory keeps standard Media3 parsing for SRT,
         // WebVTT and TTML while routing ASS/SSA (libass), PGS, VobSub and DVB through
         // the bundled FFmpeg decoders, and it extracts fonts attached to Matroska.
