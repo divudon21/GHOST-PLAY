@@ -137,11 +137,47 @@ private val DefaultAppTypography = Typography()
 // visibly worked for the system Default style. Registering a single entry instead
 // lets Compose apply synthetic bold for FontWeight.Bold, so Bold Text now works
 // with every text style (Manrope / Nunito / Lora / JetBrains Mono / Inter).
-private val ManropeFontFamily = FontFamily(Font(R.font.manrope_variable))
-private val NunitoFontFamily = FontFamily(Font(R.font.nunito_variable))
-private val LoraFontFamily = FontFamily(Font(R.font.lora_variable))
-private val JetBrainsMonoFontFamily = FontFamily(Font(R.font.jetbrains_mono_variable))
-private val InterFontFamily = FontFamily(Font(R.font.inter_variable))
+// Bundled fonts are shipped as real static weights instead of variable files: the
+// Nunito/Manrope variable fonts report a *default* weight of 200 (ExtraLight), so
+// Compose — unlike Flutter, which picks the axis value from the TextStyle —
+// rendered all of their text extra-light and fake-bolded the rest, which is why
+// "Soft and rounded" looked wrong. Static instances make every weight render the
+// way DownList shows it.
+private fun weightedFontFamily(
+    regularRes: Int,
+    mediumRes: Int,
+    boldRes: Int,
+): FontFamily = FontFamily(
+    Font(regularRes, weight = FontWeight.Normal),
+    Font(mediumRes, weight = FontWeight.Medium),
+    Font(boldRes, weight = FontWeight.Bold),
+)
+
+private val ManropeFontFamily = weightedFontFamily(
+    R.font.manrope_regular,
+    R.font.manrope_medium,
+    R.font.manrope_bold,
+)
+private val NunitoFontFamily = weightedFontFamily(
+    R.font.nunito_regular,
+    R.font.nunito_medium,
+    R.font.nunito_bold,
+)
+private val LoraFontFamily = weightedFontFamily(
+    R.font.lora_regular,
+    R.font.lora_medium,
+    R.font.lora_bold,
+)
+private val JetBrainsMonoFontFamily = weightedFontFamily(
+    R.font.jetbrains_mono_regular,
+    R.font.jetbrains_mono_medium,
+    R.font.jetbrains_mono_bold,
+)
+private val InterFontFamily = weightedFontFamily(
+    R.font.inter_regular,
+    R.font.inter_medium,
+    R.font.inter_bold,
+)
 private val CabaretFontFamily = FontFamily(Font(R.font.cabaret))
 private val GrazingMaceFontFamily = FontFamily(Font(R.font.grazing_mace))
 private val AbrahamStampFontFamily = FontFamily(Font(R.font.abraham_stamp))

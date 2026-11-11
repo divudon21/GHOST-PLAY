@@ -2109,10 +2109,10 @@ private fun applySubtitleStyle(
 
     val typeface = when (font) {
         SubtitleFont.DEFAULT -> Typeface.DEFAULT
-        SubtitleFont.LORA -> ResourcesCompat.getFont(context, R.font.lora_variable)
+        SubtitleFont.LORA -> ResourcesCompat.getFont(context, R.font.lora_regular)
         SubtitleFont.JETBRAINS_MONO ->
-            ResourcesCompat.getFont(context, R.font.jetbrains_mono_variable)
-        SubtitleFont.NUNITO -> ResourcesCompat.getFont(context, R.font.nunito_variable)
+            ResourcesCompat.getFont(context, R.font.jetbrains_mono_regular)
+        SubtitleFont.NUNITO -> ResourcesCompat.getFont(context, R.font.nunito_regular)
     }
 
     val style = CaptionStyleCompat(
