@@ -823,6 +823,7 @@ fun MainApp(
         }
     }
 }
+}
 
 /**
  * Navigation arguments arrive in the form the caller put them in: the app
