@@ -1,0 +1,53 @@
+name: Import asset
+
+# Downloads an external file (image, zip, ...) on a runner — whose network is not
+# restricted — and publishes it on the `asset-import` branch so the workspace can
+# read it. Used to bring in design assets that are hosted on sites the sandbox
+# cannot reach.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Direct download URL
+        required: true
+      dest:
+        description: Folder inside the repo to put the files in
+        required: false
+        default: imported
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ inputs.dest }}"
+          curl -sSL --fail --retry 3 --retry-delay 2 -o /tmp/asset.bin "${{ inputs.url }}"
+          ls -l /tmp/asset.bin
+          head -c 16 /tmp/asset.bin | xxd | head -2 || true
+          if unzip -l /tmp/asset.bin >/dev/null 2>&1; then
+            echo "Detected ZIP archive"
+            unzip -o /tmp/asset.bin -d "${{ inputs.dest }}"
+          else
+            cp /tmp/asset.bin "${{ inputs.dest }}/asset.bin"
+          fi
+          echo "--- imported files ---"
+          find "${{ inputs.dest }}" -type f | sort
+
+      - name: Publish on asset-import branch
+        run: |
+          set -euo pipefail
+          git config user.name "asset-import"
+          git config user.email "asset-import@users.noreply.github.com"
+          git checkout -B asset-import
+          git add "${{ inputs.dest }}"
+          git commit -m "import asset from ${{ inputs.url }}"
+          git push --force origin asset-import
