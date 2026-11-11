@@ -30,6 +30,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
 @OptIn(UnstableApi::class)
+// MediaStyleNotificationHelper (Media3 1.11's replacement for the removed
+// sessionCompatToken) is itself an unstable API.
+@androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
@@ -375,11 +378,22 @@ class MusicService : MediaSessionService() {
         // notification) whenever a playlist had just one track.
         val compactActions = compactActionIndices(hasSiblings = hasNext)
 
-        val mediaStyle = androidx.media.app.NotificationCompat.MediaStyle()
-            .setMediaSession(mediaSession?.platformToken)
-            .setShowActionsInCompactView(*compactActions)
-            .setShowCancelButton(true)
-            .setCancelButtonIntent(stopPendingIntent)
+        // Media3 1.11 removed MediaSession.sessionCompatToken; its own
+        // MediaStyleNotificationHelper bridges the new SessionToken both to the
+        // platform MediaStyle (API 21+) and to androidx.media's legacy
+        // MediaSessionCompat token, which is what builds without it.
+        val currentSession = mediaSession
+        val mediaStyle: NotificationCompat.Style = if (currentSession != null) {
+            androidx.media3.session.MediaStyleNotificationHelper.MediaStyle(currentSession)
+                .setShowActionsInCompactView(*compactActions)
+                .setShowCancelButton(true)
+                .setCancelButtonIntent(stopPendingIntent)
+        } else {
+            androidx.media.app.NotificationCompat.MediaStyle()
+                .setShowActionsInCompactView(*compactActions)
+                .setShowCancelButton(true)
+                .setCancelButtonIntent(stopPendingIntent)
+        }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)

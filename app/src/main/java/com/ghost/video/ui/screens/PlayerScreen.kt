@@ -74,6 +74,7 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegSubtitleExtracto
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.withFfmpegSubtitles
 import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleDelayMilliseconds
+import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleSpeed
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -149,6 +150,10 @@ fun PlayerScreen(url: String) {
     val subtitleSize by settingsRepository.subtitleSize.collectAsState(initial = 20)
     val subtitleBackground by settingsRepository.subtitleBackground.collectAsState(initial = false)
     val subtitleEmbeddedStyles by settingsRepository.subtitleEmbeddedStyles.collectAsState(initial = true)
+    // Subtitle sync: delay shifts the cues in time, speed corrects slow drift.
+    // Both preferences also ship as sliders in Subtitle settings.
+    val subtitleDelaySetting by settingsRepository.subtitleDelay.collectAsState(initial = 0)
+    val subtitleSpeedSetting by settingsRepository.subtitleSpeed.collectAsState(initial = 1f)
     val dialogThemePreference by settingsRepository.dialogThemePreference.collectAsState(initial = DialogThemePreference.FOLLOW_SYSTEM)
     val appColor by settingsRepository.appColor.collectAsState(initial = com.ghost.video.data.AppColor.PURPLE)
     val themePreference by settingsRepository.themePreference.collectAsState(initial = ThemePreference.SYSTEM)
@@ -382,6 +387,12 @@ fun PlayerScreen(url: String) {
         }
 
         player.apply {
+            // Subtitle timing. nextlib's NextTextRenderer exposes these on the
+            // player itself (Media3 1.11 API), so no view plumbing is needed.
+            runCatching {
+                subtitleDelayMilliseconds = subtitleDelaySetting.toLong()
+                subtitleSpeed = subtitleSpeedSetting
+            }
             // Any failure has to be VISIBLE: the screen is black otherwise and the
             // user has no idea whether the file, the codec or the container failed.
             addListener(object : Player.Listener {

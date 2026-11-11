@@ -186,6 +186,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             initialValue = true
         )
 
+    /** Subtitle timing correction in ms (positive delays subtitles). */
+    val subtitleDelay: StateFlow<Int> = repository.subtitleDelay
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = 0
+        )
+
+    /** Subtitle speed multiplier (1.0 = normal). */
+    val subtitleSpeed: StateFlow<Float> = repository.subtitleSpeed
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = 1f
+        )
+
     val resumePlayback: StateFlow<Boolean> = repository.resumePlayback
         .stateIn(
             scope = viewModelScope,
@@ -372,6 +388,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setSubtitleEmbeddedStyles(enabled: Boolean) {
         viewModelScope.launch { repository.setSubtitleEmbeddedStyles(enabled) }
+    }
+
+    fun setSubtitleDelay(milliseconds: Int) {
+        viewModelScope.launch { repository.setSubtitleDelay(milliseconds) }
+    }
+
+    fun setSubtitleSpeed(multiplier: Float) {
+        viewModelScope.launch { repository.setSubtitleSpeed(multiplier) }
     }
 
     fun setResumePlayback(enabled: Boolean) {
