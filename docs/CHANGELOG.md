@@ -5,6 +5,23 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.27 (beta)
+
+### Fixes
+- **"No videos found" no longer flashes on launch.** An empty list and a list that
+  has not been read yet look identical, and the home screen drew the empty state
+  in the gap between being opened and MediaStore answering — every launch, for
+  about a second, before the grid replaced it. The gap is real, because the query
+  belongs off the main thread; what was wrong is that nothing was drawn in it.
+  The screen now holds a loading state from its first frame and shows the app's
+  loading indicator until the first read returns, then draws the grid or the
+  empty state as the result actually is. A cached list still comes up instantly
+  when returning to the tab, and a manual refresh keeps the rows on screen
+  instead of clearing them.
+- The music tab had the same one-frame gap between its first composition and the
+  effect that asks for the first page; its page flag now starts set when there is
+  nothing cached, so its empty state cannot win that frame either.
+
 ## 3.26 (beta)
 
 ### About

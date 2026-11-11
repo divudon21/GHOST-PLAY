@@ -131,6 +131,13 @@ fun HomeScreen(
     // does NOT re-query MediaStore (the old reload caused tab-switch jitter).
     var localVideos by remember { mutableStateOf(cachedVideos ?: emptyList()) }
     var hasPermission by remember { mutableStateOf(checkVideoPermission(context)) }
+    // An empty list and a list that has not been read yet look identical, and the
+    // screen used to say "No videos found" in the gap between being opened and
+    // MediaStore answering — every launch, for about a second. The gap is real
+    // (the query is off the main thread, as it must be); what was wrong is that
+    // nothing was drawn in it. Cached videos start the screen already loaded, so
+    // coming back to Home from another tab still shows the grid at once.
+    var isLoading by remember { mutableStateOf(cachedVideos == null) }
     var refreshKey by remember { mutableStateOf(0) }
     val viewLayout by settingsViewModel.viewLayout.collectAsState()
     // Read thumbnail settings ONCE at screen level and pass them down. Reading a
@@ -180,6 +187,9 @@ fun HomeScreen(
         } else {
             permissionLauncher.launch(permissionsToRequest)
         }
+        // Only the first read is covered by the indicator: a manual refresh holds
+        // the list it already has on screen while the new one is read.
+        isLoading = false
     }
 
     val reload: () -> Unit = { refreshKey++ }
@@ -330,6 +340,13 @@ fun HomeScreen(
                         Text("Open Settings")
                     }
                 }
+            }
+        } else if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                AppLoadingIndicator(style = loadingIndicatorStyle)
             }
         } else if (localVideos.isEmpty()) {
             EmptyState(
