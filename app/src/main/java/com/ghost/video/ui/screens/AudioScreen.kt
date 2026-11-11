@@ -94,7 +94,9 @@ fun AudioScreen(
     val currentAudio by viewModel.currentAudio.collectAsState()
     var localAudios by remember { mutableStateOf(cachedAudios ?: emptyList()) }
     var hasPermission by remember { mutableStateOf(checkAudioPermission(context)) }
-    var isLoadingPage by remember { mutableStateOf(false) }
+    // True from the first frame when there is no cache, so the empty state
+    // cannot win the frame before the first page is asked for.
+    var isLoadingPage by remember { mutableStateOf(cachedAudios == null) }
     var hasMorePages by remember { mutableStateOf(true) }
     var nextOffset by remember { mutableIntStateOf(0) }
     var refreshKey by remember { mutableIntStateOf(0) }
