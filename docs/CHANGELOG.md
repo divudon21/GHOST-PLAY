@@ -5,6 +5,14 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.20
+
+### Interface
+- Mini player: the *Swipe up for full player* hint row is gone, and the host
+  `Scaffold` now draws a transparent container so the strip above and below the
+  bar shows the page instead of a container-coloured band. The gesture itself is
+  unchanged (tap or swipe up opens the player, swipe down dismisses).
+
 ## 3.19
 
 ### Interface

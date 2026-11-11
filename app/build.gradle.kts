@@ -15,8 +15,8 @@ android {
         applicationId = "com.ghost.video"
         minSdk = 24
         targetSdk = 36
-        versionCode = 33
-        versionName = "3.19"
+        versionCode = 34
+        versionName = "3.20"
     }
 
     signingConfigs {
