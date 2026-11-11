@@ -53,6 +53,7 @@ fun SettingsScreen(
     onNavigateToSearch: () -> Unit = {},
     onNavigateToGeneral: () -> Unit = {},
     onNavigateToUpdates: () -> Unit = {},
+    onNavigateToAbout: () -> Unit = {},
     onSwipeNext: () -> Unit = {},
     onSwipePrevious: () -> Unit = {}
 ) {
@@ -124,6 +125,14 @@ fun SettingsScreen(
             subtitle = "Check for new versions",
             icon = NextIcons.Update,
             onClick = onNavigateToUpdates
+        ),
+        // NextPlayer puts About last, after General: the page about the app is
+        // the last thing in the list about the app.
+        SettingsCategory(
+            title = "About",
+            subtitle = "App version, credits and licences",
+            icon = NextIcons.Info,
+            onClick = onNavigateToAbout
         )
     )
 

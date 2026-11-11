@@ -59,6 +59,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.ghost.video.viewmodel.AudioViewModel
+import com.ghost.video.ui.components.LocalMiniPlayerVisible
 import com.ghost.video.ui.screens.AudioPlayerScreen
 import com.ghost.video.ui.screens.AudioScreen
 import com.ghost.video.ui.screens.AudioSettingsScreen
@@ -116,6 +117,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import com.ghost.video.ui.screens.AboutScreen
+import com.ghost.video.ui.screens.LibrariesScreen
 import com.ghost.video.ui.screens.AppearanceSettingsScreen
 import com.ghost.video.ui.screens.DecoderSettingsScreen
 import com.ghost.video.ui.screens.GeneralSettingsScreen
@@ -459,6 +462,12 @@ fun MainApp(
         // a strip of the screen for the pills: the pages run to the bottom edge
         // and the pills float on top of whatever is there.
         Box(modifier = Modifier.fillMaxSize()) {
+        // The pages need to know the pill is over them: it is drawn here, on
+        // top, so only this scope can say whether the bottom of a list is
+        // covered by a bar or by a bar and a track.
+        CompositionLocalProvider(
+            LocalMiniPlayerVisible provides (showMiniPlayer && miniPlayerAudio != null),
+        ) {
         NavHost(
             navController = navController,
             startDestination = "home",
@@ -550,6 +559,7 @@ fun MainApp(
                     onNavigateToSearch = { navController.navigate("search_settings") { launchSingleTop = true } },
                     onNavigateToGeneral = { navController.navigate("general_settings") { launchSingleTop = true } },
                     onNavigateToUpdates = { navController.navigate("updates") { launchSingleTop = true } },
+                    onNavigateToAbout = { navController.navigate("about") { launchSingleTop = true } },
                     onSwipeNext = { swipeToAdjacentTab(1) },
                     onSwipePrevious = { swipeToAdjacentTab(-1) }
                 )
@@ -672,6 +682,29 @@ fun MainApp(
                 UpdatesScreen(onBack = { navController.popBackStack() })
             }
             composable(
+                "about",
+                enterTransition = { TAB_SLIDE_IN_RIGHT },
+                exitTransition = { TAB_SLIDE_OUT_LEFT },
+                popEnterTransition = { TAB_SLIDE_IN_LEFT },
+                popExitTransition = { TAB_SLIDE_OUT_RIGHT }
+            ) {
+                AboutScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenLibraries = {
+                        navController.navigate("libraries") { launchSingleTop = true }
+                    },
+                )
+            }
+            composable(
+                "libraries",
+                enterTransition = { TAB_SLIDE_IN_RIGHT },
+                exitTransition = { TAB_SLIDE_OUT_LEFT },
+                popEnterTransition = { TAB_SLIDE_IN_LEFT },
+                popExitTransition = { TAB_SLIDE_OUT_RIGHT }
+            ) {
+                LibrariesScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
                 route = "player/{url}",
                 arguments = listOf(navArgument("url") { type = NavType.StringType }),
                 enterTransition = { FADE_IN },
@@ -682,6 +715,7 @@ fun MainApp(
                 val url = backStackEntry.arguments?.getString("url") ?: ""
                 PlayerScreen(url = normalizeRouteUrl(url))
             }
+        }
         }
 
         // ---- The floating pills ----
