@@ -126,6 +126,10 @@ fun SettingsScreen(
         )
     )
 
+    // One scroll state for this page, hoisted so a recomposition cannot replace
+    // it and drop the reader back to the top mid-scroll.
+    val scrollState = rememberScrollState()
+
     Scaffold(
         modifier = Modifier.tabSwipe(onSwipeNext, onSwipePrevious),
         // The outer NavHost already pads the tab screens by the status/nav bar
@@ -151,7 +155,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(state = rememberScrollState())
+                .verticalScroll(state = scrollState)
                 .padding(paddingValues = innerPadding)
                 .padding(horizontal = 16.dp)
                 .padding(vertical = 16.dp),

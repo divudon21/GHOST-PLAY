@@ -5,8 +5,10 @@ import android.os.Bundle
 import android.os.Build
 import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -44,6 +46,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.IntOffset
@@ -149,15 +152,24 @@ private const val ANIM_DURATION = 260
 private const val NAV_DURATION = 200
 
 /**
- * How long the full player takes to come up, and to put itself away.
+ * How long the full player takes to come up over the pages, and to leave.
  *
- * Matched to BitChord's player spring, which is about 0.45s of response: a
- * shorter slide reads as a cut rather than as a sheet arriving. The enter and
- * the exit on each side of the route use the same figure, so neither transition
- * can end before the other and leave a frame with nothing on it.
+ * It is an overlay rather than a route — see `showAudioPlayer` — so this is only
+ * the sheet's own arrival: the page underneath is already painted and stays
+ * painted, which is what makes the arrival start from something rather than
+ * from a blank frame. BitChord's own player fades in over its host the same way,
+ * and its spring is about 0.45s, so this sits just inside that.
  */
-private const val AUDIO_PLAYER_OPEN_MS = 320
-private const val AUDIO_PLAYER_CLOSE_MS = 320
+private const val AUDIO_PLAYER_FADE_MS = 260
+
+/**
+ * The spring the player sheet rises on: critically damped, so it never bounces,
+ * with about 0.45s of response.
+ *
+ * The same figure as BitChord's `PlayerSheetMotion.SLIDE_STIFFNESS`, which is
+ * where its own player's open and close come from.
+ */
+private const val SLIDE_STIFFNESS = 195f
 
 private fun navTween(): FiniteAnimationSpec<IntOffset> =
     tween(durationMillis = NAV_DURATION, easing = LinearEasing)
@@ -396,9 +408,22 @@ fun MainApp(
     val currentAudio by audioViewModel.currentAudio.collectAsState()
     val isPlaying by audioViewModel.isPlaying.collectAsState()
     val miniPlayerAudio = currentAudio
+
+    // The full player is a modal sheet over the app, not a navigation route —
+    // exactly how BitChord holds its own player. As a route, the page it was
+    // opened from had to leave before it arrived, and there was always a frame
+    // with neither on screen; as an overlay the page stays composed underneath
+    // for the whole arrival, so there is nothing to be blank.
+    var showAudioPlayer by rememberSaveable { mutableStateOf(false) }
+    // A sheet over an empty state is not a player: playback ending puts it away.
+    LaunchedEffect(miniPlayerAudio) {
+        if (miniPlayerAudio == null) showAudioPlayer = false
+    }
+    BackHandler(enabled = showAudioPlayer) { showAudioPlayer = false }
+
     val showMiniPlayer = miniPlayerAudio != null &&
             currentRoute != "player/{url}" &&
-            currentRoute != "audio_player"
+            !showAudioPlayer
     val showNavBar = currentRoute in showBottomNavRoutes
 
     // Where the tab bar's top is, in window pixels, and the same for this
@@ -495,42 +520,6 @@ fun MainApp(
                     viewModel = audioViewModel,
                     onSwipeNext = { swipeToAdjacentTab(1) },
                     onSwipePrevious = { swipeToAdjacentTab(-1) }
-                )
-            }
-            composable(
-                "audio_player",
-                // Both screens are opaque and the player is a full-window sheet,
-                // so they overlap for the whole transition rather than
-                // cross-fading through a shared blank frame. A fade-out that
-                // finished before the player arrived — which is what a 200ms
-                // exit against a 300ms enter does — left the page gone and the
-                // player not yet there, for as long as the difference.
-                enterTransition = {
-                    slideInVertically(
-                        initialOffsetY = { it / 6 },
-                        animationSpec = tween(AUDIO_PLAYER_OPEN_MS, easing = FastOutSlowInEasing),
-                    ) + fadeIn(tween(AUDIO_PLAYER_OPEN_MS))
-                },
-                exitTransition = {
-                    // Only the player's own route ever receives this, and it is
-                    // covered by whatever is coming in.
-                    fadeOut(tween(AUDIO_PLAYER_OPEN_MS))
-                },
-                popEnterTransition = {
-                    fadeIn(tween(AUDIO_PLAYER_CLOSE_MS))
-                },
-                popExitTransition = {
-                    // Same length as the enter opposite it, so the page is
-                    // already painted underneath when the player starts leaving.
-                    slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = tween(AUDIO_PLAYER_CLOSE_MS, easing = FastOutSlowInEasing),
-                    ) + fadeOut(tween(AUDIO_PLAYER_CLOSE_MS))
-                }
-            ) {
-                AudioPlayerScreen(
-                    audioViewModel = audioViewModel,
-                    onBack = { navController.popBackStack() }
                 )
             }
             composable(
@@ -786,7 +775,7 @@ fun MainApp(
                             isPlaying = isPlaying,
                             progress = progress.floatValue,
                             artwork = artwork,
-                            onOpen = { navController.navigate("audio_player") { launchSingleTop = true } },
+                            onOpen = { showAudioPlayer = true },
                             onTogglePlayPause = { audioViewModel.togglePlayPause() },
                             onPrevious = { audioViewModel.skipToPrevious() },
                             onNext = { audioViewModel.skipToNext() },
@@ -795,9 +784,45 @@ fun MainApp(
                     }
                 }
             }
-        }
+
+            // ---- The full player, over everything ----
+            // Last in the box, so it covers the pages and both floating pills.
+            //
+            // It arrives on the same spring BitChord's own player sheet does,
+            // and it leaves by animating *itself* off the screen before it asks
+            // to be taken away (see AudioPlayerScreen's drag) — so there is no
+            // exit transition to run here and no frame in either direction with
+            // nothing on screen: the pages are painted underneath the whole
+            // time, and the sheet is either arriving over them or already gone.
+            val playerSheet = remember { Animatable(1f) }
+            LaunchedEffect(showAudioPlayer) {
+                if (showAudioPlayer) {
+                    playerSheet.snapTo(1f)
+                    playerSheet.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = SLIDE_STIFFNESS,
+                            visibilityThreshold = 0.0005f,
+                        ),
+                    )
+                }
+            }
+            if (showAudioPlayer) {
+                val travel = rootHeightPx.toFloat()
+                // The fallback covers the frame before the container has been
+                // measured, when a zero travel would otherwise place the sheet
+                // fully open for one frame before it slides.
+                val travelPx = if (travel > 0f) travel else with(density) { 900.dp.toPx() }
+                AudioPlayerScreen(
+                    audioViewModel = audioViewModel,
+                    onBack = { showAudioPlayer = false },
+                    extraDisplacementPx = { travelPx * playerSheet.value },
+                )
+            }
         }
     }
+}
 }
 
 /**

@@ -75,6 +75,7 @@ fun AudioSettingsScreen(
     val volumeBoost by viewModel.volumeBoostEnabled.collectAsState()
 
     var showLanguageOptions by rememberSaveable { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
     val noneLabel = stringResource(id = R.string.audio_language_none)
     // Building the locale list is not free, so it is computed once per screen.
     val languages = remember(noneLabel) {
@@ -103,7 +104,7 @@ fun AudioSettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(state = rememberScrollState())
+                .verticalScroll(state = scrollState)
                 .padding(paddingValues = innerPadding)
                 .padding(horizontal = 16.dp),
         ) {
