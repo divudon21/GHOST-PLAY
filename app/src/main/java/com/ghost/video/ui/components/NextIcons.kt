@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.AppSettingsAlt
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -119,6 +120,8 @@ object NextIcons {
     val Check = Icons.Rounded.Check
     val CheckBox = Icons.Rounded.CheckCircle
     val CheckBoxOutline = Icons.Rounded.RadioButtonUnchecked
+    /** The disclosure chevron on a row that expands its own options. */
+    val ChevronDown = Icons.Rounded.KeyboardArrowDown
     val Contrast = Icons.Rounded.Contrast
     val DarkMode = Icons.Rounded.DarkMode
     val DashBoard = Icons.Rounded.Dashboard

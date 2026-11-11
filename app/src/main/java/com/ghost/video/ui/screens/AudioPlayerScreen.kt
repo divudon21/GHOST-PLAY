@@ -164,6 +164,16 @@ fun AudioPlayerScreen(
         }
     }
 
+    // Read once at the moment of opening, not only from the poll below: the poll
+    // starts a tick later, and for that tick the bar and both timestamps would
+    // be showing the reading from whenever the screen was last on.
+    LaunchedEffect(audio.uri) {
+        if (!isUserSeeking) {
+            positionMs = audioViewModel.getCurrentPosition()
+            durationMs = audioViewModel.getDuration()
+        }
+    }
+
     val effectiveDuration = if (durationMs > 0) durationMs else 1L
     val shownFraction: () -> Float = {
         if (isUserSeeking) {
@@ -443,7 +453,12 @@ private val CONTROL_SPREAD = 8.dp
 /** [uri]'s artwork, decoded once and cached by the shared loader. */
 @Composable
 private fun rememberAudioArtwork(uri: String?): Bitmap? {
-    var artwork by remember(uri) { mutableStateOf<Bitmap?>(null) }
+    // Seeded from the loader's own cache, which the mini player has almost
+    // always already filled: opening the player then paints the sleeve on its
+    // first frame instead of fading it in over the backdrop.
+    var artwork by remember(uri) {
+        mutableStateOf(uri?.let { com.ghost.video.data.MusicArtworkLoader.cached(it) })
+    }
     LaunchedEffect(uri) {
         if (uri == null) return@LaunchedEffect
         artwork = com.ghost.video.data.MusicArtworkLoader.load(uri)

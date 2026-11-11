@@ -1,6 +1,8 @@
 package com.ghost.video.ui.player
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,12 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ghost.video.R
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -152,7 +151,7 @@ fun TransportRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TransportGlyph(
-            icon = Icons.Rounded.SkipPrevious,
+            glyph = painterResource(R.drawable.ic_player_previous),
             contentDescription = "Previous",
             size = skipSize,
             touchSize = PLAYER_SKIP_TOUCH_SIZE,
@@ -172,7 +171,10 @@ fun TransportRow(
             }
         } else {
             TransportGlyph(
-                icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                // BitChord's own glyphs, with the horizontal crossfade it uses
+                // when the state changes — see [PlayPauseGlyph].
+                glyph = null,
+                playPause = isPlaying,
                 contentDescription = if (isPlaying) "Pause" else "Play",
                 size = playSize,
                 touchSize = playTouch,
@@ -180,7 +182,7 @@ fun TransportRow(
             )
         }
         TransportGlyph(
-            icon = Icons.Rounded.SkipNext,
+            glyph = painterResource(R.drawable.ic_player_next),
             contentDescription = "Next",
             size = skipSize,
             touchSize = PLAYER_SKIP_TOUCH_SIZE,
@@ -198,7 +200,8 @@ fun TransportRow(
  */
 @Composable
 private fun TransportGlyph(
-    icon: ImageVector,
+    /** BitChord's own drawable. Null for the play/pause pair — see [playPause]. */
+    glyph: Painter?,
     contentDescription: String,
     size: Dp,
     touchSize: Dp = size,
@@ -206,6 +209,8 @@ private fun TransportGlyph(
     enabled: Boolean = true,
     /** Vertical squash of the glyph alone; its width and touch box are untouched. */
     heightScale: Float = 1f,
+    /** Whether this is the play/pause pair, drawn as a crossfade. */
+    playPause: Boolean? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     // Faded rather than hidden: the row keeps its shape at the ends of a queue.
@@ -226,13 +231,50 @@ private fun TransportGlyph(
             },
         contentAlignment = Alignment.Center,
     ) {
+        if (playPause != null) {
+            PlayPauseGlyph(
+                isPlaying = playPause,
+                size = size,
+                tint = Color.White.copy(alpha = alpha),
+                contentDescription = contentDescription,
+            )
+        } else if (glyph != null) {
+            Icon(
+                painter = glyph,
+                contentDescription = contentDescription,
+                tint = Color.White.copy(alpha = alpha),
+                modifier = Modifier
+                    .size(size)
+                    .then(if (heightScale != 1f) Modifier.graphicsLayer { scaleY = heightScale } else Modifier),
+            )
+        }
+    }
+}
+
+/**
+ * The play/pause glyph, crossfaded rather than swapped — BitChord's
+ * `TransportGlyph` draws its two own assets the same way, and a glyph that
+ * changes shape in one frame is the one part of the transport the eye catches.
+ */
+@Composable
+private fun PlayPauseGlyph(
+    isPlaying: Boolean,
+    size: Dp,
+    tint: Color,
+    contentDescription: String,
+) {
+    Crossfade(
+        targetState = isPlaying,
+        animationSpec = tween(durationMillis = 180),
+        label = "playPauseGlyph",
+    ) { playing ->
         Icon(
-            imageVector = icon,
+            painter = painterResource(
+                if (playing) R.drawable.ic_player_pause else R.drawable.ic_player_play,
+            ),
             contentDescription = contentDescription,
-            tint = Color.White.copy(alpha = alpha),
-            modifier = Modifier
-                .size(size)
-                .then(if (heightScale != 1f) Modifier.graphicsLayer { scaleY = heightScale } else Modifier),
+            tint = tint,
+            modifier = Modifier.size(size),
         )
     }
 }

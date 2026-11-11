@@ -7,6 +7,7 @@ import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateDpAsState
@@ -146,6 +147,17 @@ private const val ANIM_DURATION = 260
 // and deeper screens slide in from the edge while the outgoing screen only drifts
 // by 30% of its width.
 private const val NAV_DURATION = 200
+
+/**
+ * How long the full player takes to come up, and to put itself away.
+ *
+ * Matched to BitChord's player spring, which is about 0.45s of response: a
+ * shorter slide reads as a cut rather than as a sheet arriving. The enter and
+ * the exit on each side of the route use the same figure, so neither transition
+ * can end before the other and leave a frame with nothing on it.
+ */
+private const val AUDIO_PLAYER_OPEN_MS = 320
+private const val AUDIO_PLAYER_CLOSE_MS = 320
 
 private fun navTween(): FiniteAnimationSpec<IntOffset> =
     tween(durationMillis = NAV_DURATION, easing = LinearEasing)
@@ -487,13 +499,33 @@ fun MainApp(
             }
             composable(
                 "audio_player",
+                // Both screens are opaque and the player is a full-window sheet,
+                // so they overlap for the whole transition rather than
+                // cross-fading through a shared blank frame. A fade-out that
+                // finished before the player arrived — which is what a 200ms
+                // exit against a 300ms enter does — left the page gone and the
+                // player not yet there, for as long as the difference.
                 enterTransition = {
-                    slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)) + fadeIn(tween(300))
+                    slideInVertically(
+                        initialOffsetY = { it / 6 },
+                        animationSpec = tween(AUDIO_PLAYER_OPEN_MS, easing = FastOutSlowInEasing),
+                    ) + fadeIn(tween(AUDIO_PLAYER_OPEN_MS))
                 },
-                exitTransition = { fadeOut(tween(200)) },
-                popEnterTransition = { fadeIn(tween(200)) },
+                exitTransition = {
+                    // Only the player's own route ever receives this, and it is
+                    // covered by whatever is coming in.
+                    fadeOut(tween(AUDIO_PLAYER_OPEN_MS))
+                },
+                popEnterTransition = {
+                    fadeIn(tween(AUDIO_PLAYER_CLOSE_MS))
+                },
                 popExitTransition = {
-                    slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(tween(300))
+                    // Same length as the enter opposite it, so the page is
+                    // already painted underneath when the player starts leaving.
+                    slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(AUDIO_PLAYER_CLOSE_MS, easing = FastOutSlowInEasing),
+                    ) + fadeOut(tween(AUDIO_PLAYER_CLOSE_MS))
                 }
             ) {
                 AudioPlayerScreen(

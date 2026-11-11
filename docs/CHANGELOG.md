@@ -5,6 +5,33 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.22
+
+### Interface
+- **Preferred audio language** opens its picker directly beneath its own row,
+  between it and the switch below, instead of appearing under the last switch in
+  the list. The row also carries a chevron that turns over while the list is
+  open. The picker still expands in place — no dialog — and the switches keep
+  their own grouped card below it.
+- The full player's transport now draws **BitChord's own glyphs**, copied from
+  `sharedUi/src/commonMain/composeResources/drawable/ic_player_play.xml`,
+  `ic_player_pause.xml`, `ic_player_next.xml` and `ic_player_previous.xml`
+  (rounded-triangle play, 40-unit-radius pause bars, the double-chevron skip
+  pair), at BitChord's sizes and its 0.85 vertical squash on the skip glyphs. The
+  play/pause pair crossfades over 180ms as BitChord's does, instead of swapping
+  shape in one frame.
+
+### Fixed
+- Opening the full player from the mini player no longer blanks the screen for
+  a moment. The route's exit faded out in 200ms while its enter took 300ms, so
+  for the difference the page was gone and the player had not arrived; the two
+  are now the same length and overlap, the player rising a sixth of its height
+  behind its own fade. Coming back is the mirror of the same thing.
+- The player's playhead, timestamps and sleeve are correct on the opening frame
+  rather than a poll later: the position is read when the screen is created, not
+  only by the 500ms poll, and the sleeve is seeded from the artwork cache the
+  mini player has already filled.
+
 ## 3.21
 
 ### Interface
