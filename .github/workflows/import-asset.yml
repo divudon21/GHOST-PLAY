@@ -14,6 +14,13 @@ on:
         description: Folder inside the repo to put the files in
         required: false
         default: imported
+  # The workspace token cannot dispatch workflows, so a push that touches
+  # asset-request.json is used as the trigger instead.
+  push:
+    branches:
+      - "arena/**"
+    paths:
+      - asset-request.json
 
 permissions:
   contents: write
@@ -26,21 +33,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve request
+        run: |
+          set -euo pipefail
+          URL="${{ inputs.url }}"
+          DEST="${{ inputs.dest }}"
+          if [ -z "${URL:-}" ]; then
+            URL=$(python3 -c "import json;print(json.load(open('asset-request.json'))['url'])")
+            DEST=$(python3 -c "import json;print(json.load(open('asset-request.json')).get('dest','imported'))")
+          fi
+          test -n "$URL" || { echo '::error title=NoUrl::No URL supplied'; exit 1; }
+          echo "URL=$URL" >> "$GITHUB_ENV"
+          echo "DEST=$DEST" >> "$GITHUB_ENV"
+          echo "Downloading $URL into $DEST"
+
       - name: Download
         run: |
           set -euo pipefail
-          mkdir -p "${{ inputs.dest }}"
-          curl -sSL --fail --retry 3 --retry-delay 2 -o /tmp/asset.bin "${{ inputs.url }}"
+          mkdir -p "$DEST"
+          curl -sSL --fail --retry 3 --retry-delay 2 -o /tmp/asset.bin "$URL"
           ls -l /tmp/asset.bin
           head -c 16 /tmp/asset.bin | xxd | head -2 || true
           if unzip -l /tmp/asset.bin >/dev/null 2>&1; then
             echo "Detected ZIP archive"
-            unzip -o /tmp/asset.bin -d "${{ inputs.dest }}"
+            unzip -o /tmp/asset.bin -d "$DEST"
           else
-            cp /tmp/asset.bin "${{ inputs.dest }}/asset.bin"
+            cp /tmp/asset.bin "$DEST/asset.bin"
           fi
           echo "--- imported files ---"
-          find "${{ inputs.dest }}" -type f | sort
+          find "$DEST" -type f | sort
 
       - name: Publish on asset-import branch
         run: |
@@ -48,6 +69,6 @@ jobs:
           git config user.name "asset-import"
           git config user.email "asset-import@users.noreply.github.com"
           git checkout -B asset-import
-          git add "${{ inputs.dest }}"
-          git commit -m "import asset from ${{ inputs.url }}"
+          git add "$DEST"
+          git commit -m "import asset from $URL"
           git push --force origin asset-import
