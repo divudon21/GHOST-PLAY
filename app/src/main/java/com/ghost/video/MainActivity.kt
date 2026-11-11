@@ -97,6 +97,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -388,12 +389,16 @@ fun MainApp(
             currentRoute != "audio_player"
     val showNavBar = currentRoute in showBottomNavRoutes
 
-    // The tab bar's measured top, in the stack's own pixels, so the mini player
-    // can ride exactly on it whether or not the bar is up. Measured rather than
-    // assumed: the bar carries the navigation-bar inset itself.
-    var navBarTopPx by remember { mutableIntStateOf(0) }
-    var stackHeightPx by remember { mutableIntStateOf(0) }
-    val restingBottomPx = with(LocalDensity.current) { MINI_PLAYER_RESTING_BOTTOM.roundToPx() }
+    // Where the tab bar's top is, in window pixels, and the same for this
+    // composable's own root — the difference between them is how far the bar's
+    // top sits above the stack's bottom edge. Measured rather than assumed: the
+    // bar carries the navigation-bar inset itself, which differs between
+    // portrait, landscape and a device with no inset at all.
+    val density = LocalDensity.current
+    var navBarTopRootPx by remember { mutableIntStateOf(0) }
+    var rootTopPx by remember { mutableIntStateOf(0) }
+    var rootHeightPx by remember { mutableIntStateOf(0) }
+    val restingBottomPx = with(density) { MINI_PLAYER_RESTING_BOTTOM.roundToPx() }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -667,7 +672,10 @@ fun MainApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onGloballyPositioned { stackHeightPx = it.size.height },
+                .onGloballyPositioned { coordinates ->
+                    rootTopPx = coordinates.positionInRoot().y.roundToInt()
+                    rootHeightPx = coordinates.size.height
+                },
         ) {
             // The tab bar, slid in and out rather than cut: a hard cut is what
             // makes Back feel like a jump instead of a smooth return.
@@ -686,7 +694,13 @@ fun MainApp(
                 NextNavigationBar(
                     isSelected = { destination -> destination.route == currentRoute },
                     onDestinationClick = { destination -> selectTab(destination) },
-                    onTopPositioned = { top -> top?.let { navBarTopPx = it } },
+                    onTopPositioned = { top ->
+                        // The bar is measured whether or not it is meant to be
+                        // seen — AnimatedVisibility keeps it composed through its
+                        // exit — so the probe reads where it *is*, never whether
+                        // it is up. [showNavBar] decides that.
+                        top?.let { navBarTopRootPx = it }
+                    },
                 )
             }
 
@@ -726,8 +740,8 @@ fun MainApp(
                                 // Above the tab bar's top when it is up, and above
                                 // the navigation-bar inset when it is not — so the
                                 // bar never lands on a reserved strip.
-                                val inset = if (showNavBar && navBarTopPx > 0) {
-                                    stackHeightPx - navBarTopPx
+                                val inset = if (showNavBar && navBarTopRootPx > 0) {
+                                    (rootTopPx + rootHeightPx - navBarTopRootPx).coerceAtLeast(0)
                                 } else {
                                     restingBottomPx
                                 }
