@@ -58,6 +58,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
+import androidx.media3.ui.CustomLayout
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -97,6 +98,10 @@ import com.ghost.video.data.SubtitleFont
 import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
 import com.ghost.video.ui.components.AppLoadingIndicator
+import com.ghost.video.ui.components.AudioAdjustSheet
+import com.ghost.video.ui.components.PlayerChoiceRow
+import com.ghost.video.ui.components.PlayerMuteButton
+import com.ghost.video.ui.components.PlayerTrackSheet
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.CoroutineScope
@@ -143,6 +148,10 @@ fun PlayerScreen(url: String) {
     var audioSyncMs by remember { mutableFloatStateOf(0f) }
     var audioPitch by remember { mutableFloatStateOf(1f) }
     var lastVolumeBeforeMute by remember { mutableFloatStateOf(1f) }
+    // What the mute control draws. Written from a listener on the player and from
+    // this screen's own toggle, never from the control itself, so any other cause
+    // of a volume change (a gesture, a track switch, a restore) shows up too.
+    var isMuted by remember { mutableStateOf(false) }
     
     // Collect settings
     val decoderPriority by settingsRepository.decoderPriority.collectAsState(initial = DecoderPriority.PREFER_DEVICE)
@@ -629,6 +638,38 @@ fun PlayerScreen(url: String) {
     }
     
     // Get dialog colors based on preference
+    // The player is the only source of truth for whether the output is silent, so
+    // the glyph is derived from it: a listener for every event that can change the
+    // volume, and one place that reads it. Declared before the view that installs
+    // it, because that view's factory runs when it is first composed.
+    val updateMuteState = {
+        val muted = runCatching { exoPlayer.volume == 0f }.getOrDefault(false)
+        if (isMuted != muted) isMuted = muted
+    }
+    val muteStateListener = remember(exoPlayer) {
+        object : Player.Listener {
+            override fun onVolumeChanged(volume: Float) {
+                updateMuteState()
+            }
+        }
+    }
+    val toggleMute = {
+        if (exoPlayer.volume > 0f) {
+            // Remember the level that was actually active: a boost above 1f is
+            // stored in the same value and must come back with the sound.
+            lastVolumeBeforeMute = exoPlayer.volume
+            exoPlayer.volume = 0f
+        } else {
+            exoPlayer.volume = lastVolumeBeforeMute.coerceIn(0f, 1f)
+        }
+        updateMuteState()
+    }
+    DisposableEffect(exoPlayer) {
+        exoPlayer.addListener(muteStateListener)
+        updateMuteState()
+        onDispose { exoPlayer.removeListener(muteStateListener) }
+    }
+
     val dialogColors = rememberDialogColors(dialogThemePreference, appColor, themePreference)
     
     // Subtitle styling used to be applied only once, when the PlayerView was
@@ -709,7 +750,34 @@ fun PlayerScreen(url: String) {
                     
                     setShowNextButton(false)
                     setShowPreviousButton(false)
-                    
+
+                    // The mute control, as a Media3 custom layout placed after the
+                    // settings button on that row. [C.LAYOUT_DISABLED] is the
+                    // default slot's "no icon" id — a custom layout supplies its
+                    // own drawing, so it must not ask to replace a named icon.
+                    //
+                    // It is a media3 custom layout rather than a view added to
+                    // exo_basic_controls by hand because its glyph is a composable
+                    // reading [isMuted]: the icon redraws itself when the volume
+                    // changes, where the old ImageView only knew what it had last
+                    // been told.
+                    setCustomLayout(
+                        context,
+                        layoutId = 0,
+                        listOf(
+                            CustomLayout(
+                                CustomLayout.LayoutParams(
+                                    CustomLayout.SLOT_INDEX_DEFAULT,
+                                    C.LAYOUT_DISABLED,
+                                ),
+                                PlayerMuteButton(
+                                    muted = isMuted,
+                                    onToggle = toggleMute,
+                                ),
+                            ),
+                        ),
+                    )
+
                     playerViewRef = this
                     
                     val basicControls = findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_basic_controls)
@@ -739,35 +807,14 @@ fun PlayerScreen(url: String) {
                         setClickFeedback { showQualityDialog = true }
                     }
                     
-                    // Mute / Unmute Button
-                    val muteButton = android.widget.ImageView(ctx).apply {
-                        setImageResource(R.drawable.ic_volume_unmute)
-                        setColorFilter(android.graphics.Color.WHITE)
-                        val paddingPx = (12 * ctx.resources.displayMetrics.density).toInt()
-                        setPadding(paddingPx, paddingPx, paddingPx, paddingPx)
-                        visibility = View.VISIBLE
-                        
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.MATCH_PARENT
-                        )
-                        
-                        setOnClickListener {
-                            setColorFilter(android.graphics.Color.CYAN)
-                            postDelayed({ setColorFilter(android.graphics.Color.WHITE) }, 200)
-                            if (exoPlayer.volume > 0f) {
-                                lastVolumeBeforeMute = exoPlayer.volume
-                                exoPlayer.volume = 0f
-                                setImageResource(R.drawable.ic_volume_mute)
-                            } else {
-                                // Restore the level that was actually active. The old
-                                // coerceIn(0.1f, 1f) also ate the 200% boost, because
-                                // the boost used to be stored in this same value.
-                                exoPlayer.volume = lastVolumeBeforeMute.coerceIn(0f, 1f)
-                                setImageResource(R.drawable.ic_volume_unmute)
-                            }
-                        }
-                    }
+                    // Mute / Unmute. A Media3 custom layout past the settings
+                    // button rather than an ImageView stuck into exo_basic_controls:
+                    // the glyph is a composable, so it changes when the state
+                    // changes — the volume is read by a listener on the player, not
+                    // remembered by whoever set the icon last.
+                    // The mute control is a custom layout past setup below: it has
+                    // to be a composable for its glyph to follow the state, and
+                    // Media3 lays custom layouts out for it.
                     
                     // Audio Sync / Pitch Button
                     val audioAdjustButton = android.widget.ImageView(ctx).apply {
@@ -894,8 +941,7 @@ fun PlayerScreen(url: String) {
                         basicControls.addView(ccButton, insertIndex + 3)
                         basicControls.addView(audioButton, insertIndex + 4)
                         basicControls.addView(audioAdjustButton, insertIndex + 5)
-                        basicControls.addView(muteButton, insertIndex + 6)
-                        basicControls.addView(qualityButton, insertIndex + 7)
+                        basicControls.addView(qualityButton, insertIndex + 6)
                     }
                     
                     // Gesture handling - Using a wrapper class to properly handle lock state
@@ -1098,41 +1144,38 @@ fun PlayerScreen(url: String) {
     
     // Quality Dialog
     if (showQualityDialog && !inPip) {
-        TrackSelectionDialog(
-            title = "Video Quality",
+        TrackSelectionSheet(
+            title = "Video quality",
             exoPlayer = exoPlayer,
             trackType = C.TRACK_TYPE_VIDEO,
             onDismiss = { showQualityDialog = false },
-            dialogColors = dialogColors
         )
     }
     
     // Audio Dialog
     if (showAudioDialog && !inPip) {
-        TrackSelectionDialog(
-            title = "Audio Track",
+        TrackSelectionSheet(
+            title = "Audio track",
             exoPlayer = exoPlayer,
             trackType = C.TRACK_TYPE_AUDIO,
             onDismiss = { showAudioDialog = false },
-            dialogColors = dialogColors
         )
     }
     
     
     // Subtitle Dialog
     if (showSubtitleDialog && !inPip) {
-        TrackSelectionDialog(
+        TrackSelectionSheet(
             title = "Subtitles",
             exoPlayer = exoPlayer,
             trackType = C.TRACK_TYPE_TEXT,
             onDismiss = { showSubtitleDialog = false },
-            dialogColors = dialogColors
         )
     }
     
     // Audio Sync / Pitch Dialog
     if (showAudioAdjustDialog && !inPip) {
-        AudioAdjustDialog(
+        AudioAdjustSheet(
             audioSyncMs = audioSyncMs,
             audioPitch = audioPitch,
             onAudioSyncChange = { value ->
@@ -1150,13 +1193,12 @@ fun PlayerScreen(url: String) {
                 exoPlayer.playbackParameters = PlaybackParameters(exoPlayer.playbackParameters.speed, 1f)
             },
             onDismiss = { showAudioAdjustDialog = false },
-            dialogColors = dialogColors
         )
     }
     
     // Aspect Ratio Dialog
     if (showAspectRatioDialog && !inPip) {
-        AspectRatioDialog(
+        AspectRatioSheet(
             currentAspectRatio = currentAspectRatio,
             onAspectRatioSelected = { ratio ->
                 currentAspectRatio = ratio
@@ -1590,510 +1632,147 @@ data class DialogColors(
 }
 
 @Composable
-fun AudioAdjustDialog(
-    audioSyncMs: Float,
-    audioPitch: Float,
-    onAudioSyncChange: (Float) -> Unit,
-    onAudioPitchChange: (Float) -> Unit,
-    onReset: () -> Unit,
-    onDismiss: () -> Unit,
-    dialogColors: DialogColors
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
-        )
-    ) {
-        Surface(
-            modifier = Modifier
-                .width(460.dp)
-                .height(400.dp)
-                .clip(RoundedCornerShape(20.dp)),
-            color = dialogColors.backgroundColor,
-            tonalElevation = 6.dp
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GraphicEq,
-                        contentDescription = null,
-                        tint = dialogColors.selectedColor,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "Audio Sync And Pitch",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = dialogColors.textColor,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                HorizontalDivider(
-                    color = dialogColors.textColor.copy(alpha = 0.12f),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(22.dp)
-                ) {
-                    PlayerAdjustSlider(
-                        title = "Audio sync",
-                        valueText = "${audioSyncMs.toInt()} ms",
-                        description = "Adjust if audio is early or late",
-                        value = audioSyncMs,
-                        onValueChange = onAudioSyncChange,
-                        valueRange = -1000f..1000f,
-                        steps = 39,
-                        dialogColors = dialogColors
-                    )
-
-                    PlayerAdjustSlider(
-                        title = "Audio pitch",
-                        valueText = "${String.format("%.2f", audioPitch)}x",
-                        description = "Fine tune voice/music pitch",
-                        value = audioPitch,
-                        onValueChange = onAudioPitchChange,
-                        valueRange = 0.50f..2.00f,
-                        steps = 29,
-                        dialogColors = dialogColors
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(dialogColors.selectedColor.copy(alpha = 0.12f))
-                            .clickable(onClick = onReset)
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Reset",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = dialogColors.selectedColor
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(dialogColors.selectedColor)
-                            .clickable(onClick = onDismiss)
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Done",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = dialogColors.selectedTextColor
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayerAdjustSlider(
-    title: String,
-    valueText: String,
-    description: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    dialogColors: DialogColors
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = dialogColors.textColor
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = dialogColors.textColor.copy(alpha = 0.68f)
-                )
-            }
-            Text(
-                text = valueText,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = dialogColors.selectedColor
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = steps,
-            modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor = dialogColors.selectedColor,
-                activeTrackColor = dialogColors.selectedColor,
-                inactiveTrackColor = dialogColors.textColor.copy(alpha = 0.22f),
-                activeTickColor = dialogColors.selectedTextColor.copy(alpha = 0.65f),
-                inactiveTickColor = dialogColors.textColor.copy(alpha = 0.38f)
-            )
-        )
-    }
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-fun TrackSelectionDialog(
+fun TrackSelectionSheet(
     title: String,
     exoPlayer: ExoPlayer,
     trackType: Int,
     onDismiss: () -> Unit,
-    dialogColors: DialogColors
 ) {
     val tracks = exoPlayer.currentTracks
-    
-    // Find the track group for this type
+
+    // One entry per track of the requested type, in the order the container lists
+    // them.
     val trackGroups = remember(tracks) {
-        val groups = mutableListOf<Pair<Tracks.Group, Int>>()
-        for (group in tracks.groups) {
-            if (group.type == trackType) {
-                for (i in 0 until group.length) {
-                    groups.add(group to i)
-                }
-            }
-        }
-        groups
-    }
-    
-    // FIXED size for ALL dialogs - same width and height regardless of track count
-    val dialogWidth = 460.dp
-    val dialogHeight = 400.dp
-    
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
-        )
-    ) {
-        Surface(
-            modifier = Modifier
-                .width(dialogWidth)
-                .height(dialogHeight)
-                .clip(RoundedCornerShape(20.dp)),
-            color = dialogColors.backgroundColor,
-            tonalElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Title
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = dialogColors.textColor,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                
-                HorizontalDivider(
-                    color = dialogColors.textColor.copy(alpha = 0.12f),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-                
-                // Scrollable list - fills remaining space
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(vertical = 8.dp)
-                ) {
-                    if (trackType == C.TRACK_TYPE_TEXT) {
-                        item {
-                            val isSelected = trackGroups.isEmpty() || !tracks.groups.any { 
-                                it.type == C.TRACK_TYPE_TEXT && it.isSelected 
-                            }
-                            TrackOption(
-                                label = "None",
-                                subtitle = "Disable subtitles",
-                                isSelected = isSelected,
-                                dialogColors = dialogColors,
-                                onClick = {
-                                    val params = exoPlayer.trackSelectionParameters
-                                        .buildUpon()
-                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                        .build()
-                                    exoPlayer.trackSelectionParameters = params
-                                    onDismiss()
-                                }
-                            )
-                        }
-                    }
-                    
-                    items(trackGroups) { (group, trackIndex) ->
-                        val format = group.getTrackFormat(trackIndex)
-                        val isSelected = group.isTrackSelected(trackIndex)
-                        
-                        when (trackType) {
-                            C.TRACK_TYPE_VIDEO -> {
-                                val width = format.width
-                                val height = format.height
-                                val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
-                                val frameRate = if (format.frameRate > 0) " • ${format.frameRate.toInt()} fps" else ""
-                                val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
-                                val label = if (width > 0 && height > 0) "${width}x${height}$bitrate$frameRate" else format.label ?: "Video"
-                                val subtitle = if (codec.isNotEmpty()) "Codec: $codec" else null
-                                
-                                TrackOption(
-                                    label = label,
-                                    subtitle = subtitle,
-                                    isSelected = isSelected,
-                                    dialogColors = dialogColors,
-                                    onClick = {
-                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
-                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                                            .buildUpon().setOverrideForType(override).build()
-                                        onDismiss()
-                                    }
-                                )
-                            }
-                            C.TRACK_TYPE_AUDIO -> {
-                                val lang = format.language?.uppercase() ?: "Unknown"
-                                val labelStr = format.label ?: ""
-                                val channels = when (format.channelCount) {
-                                    1 -> "Mono"
-                                    2 -> "Stereo"
-                                    6 -> "5.1 Surround"
-                                    8 -> "7.1 Surround"
-                                    in 3..5 -> "${format.channelCount}ch"
-                                    else -> ""
-                                }
-                                val bitrate = if (format.bitrate > 0) "${format.bitrate / 1000} kbps" else ""
-                                val sampleRate = if (format.sampleRate > 0) "${format.sampleRate / 1000} kHz" else ""
-                                val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
-                                
-                                val mainLabel = buildString {
-                                    append(lang)
-                                    if (labelStr.isNotEmpty()) append(" • $labelStr")
-                                }
-                                val subInfo = buildList {
-                                    if (channels.isNotEmpty()) add(channels)
-                                    if (bitrate.isNotEmpty()) add(bitrate)
-                                    if (sampleRate.isNotEmpty()) add(sampleRate)
-                                    if (codec.isNotEmpty()) add(codec)
-                                }.joinToString(" • ")
-                                
-                                TrackOption(
-                                    label = mainLabel,
-                                    subtitle = subInfo.ifEmpty { null },
-                                    isSelected = isSelected,
-                                    dialogColors = dialogColors,
-                                    onClick = {
-                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
-                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                                            .buildUpon().setOverrideForType(override).build()
-                                        onDismiss()
-                                    }
-                                )
-                            }
-                            C.TRACK_TYPE_TEXT -> {
-                                val lang = format.language?.uppercase() ?: "Unknown"
-                                val labelStr = format.label ?: ""
-                                val mimeType = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
-                                
-                                val flags = buildList {
-                                    if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) add("Forced")
-                                    if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) add("SDH")
-                                    if ((format.roleFlags and C.ROLE_FLAG_CAPTION) != 0) add("Caption")
-                                    if ((format.roleFlags and C.ROLE_FLAG_SUBTITLE) != 0) add("Subtitle")
-                                    if ((format.roleFlags and C.ROLE_FLAG_DUB) != 0) add("Dub")
-                                    if ((format.roleFlags and C.ROLE_FLAG_COMMENTARY) != 0) add("Commentary")
-                                    if ((format.roleFlags and C.ROLE_FLAG_EASY_TO_READ) != 0) add("Easy Read")
-                                }
-                                
-                                val mainLabel = buildString {
-                                    append(lang)
-                                    if (labelStr.isNotEmpty() && labelStr != lang) append(" • $labelStr")
-                                }
-                                val subInfo = buildList {
-                                    addAll(flags)
-                                    if (mimeType.isNotEmpty()) add(mimeType)
-                                }.joinToString(" • ")
-                                
-                                TrackOption(
-                                    label = mainLabel,
-                                    subtitle = subInfo.ifEmpty { null },
-                                    isSelected = isSelected,
-                                    dialogColors = dialogColors,
-                                    onClick = {
-                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
-                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                                            .buildUpon().setOverrideForType(override).build()
-                                        onDismiss()
-                                    }
-                                )
-                            }
-                            else -> {
-                                TrackOption(
-                                    label = format.label ?: "Track $trackIndex",
-                                    subtitle = null,
-                                    isSelected = isSelected,
-                                    dialogColors = dialogColors,
-                                    onClick = {
-                                        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
-                                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                                            .buildUpon().setOverrideForType(override).build()
-                                        onDismiss()
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    
-                    if (trackGroups.isEmpty() && trackType != C.TRACK_TYPE_TEXT) {
-                        item {
-                            Text(
-                                text = "No tracks available",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = dialogColors.textColor.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(20.dp)
-                            )
-                        }
-                    }
+        buildList {
+            for (group in tracks.groups) {
+                if (group.type == trackType) {
+                    for (i in 0 until group.length) add(group to i)
                 }
             }
         }
     }
-}
 
-@Composable
-fun TrackOption(
-    label: String,
-    subtitle: String?,
-    isSelected: Boolean,
-    dialogColors: DialogColors,
-    onClick: () -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 20.dp, vertical = if (subtitle != null) 10.dp else 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(
-                selected = isSelected,
-                onClick = onClick,
-                colors = RadioButtonDefaults.colors(
-                    selectedColor = dialogColors.selectedColor,
-                    unselectedColor = dialogColors.textColor.copy(alpha = 0.6f)
-                )
+    fun selectOverride(group: Tracks.Group, index: Int) {
+        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(index))
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+            .buildUpon()
+            .setOverrideForType(override)
+            .build()
+        onDismiss()
+    }
+
+    PlayerTrackSheet(title = title, onDismiss = onDismiss) {
+        if (trackType == C.TRACK_TYPE_TEXT) {
+            val subtitlesOff = trackGroups.isEmpty() ||
+                tracks.groups.none { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
+            PlayerChoiceRow(
+                label = "None",
+                subtitle = "Disable subtitles",
+                selected = subtitlesOff,
+                onClick = {
+                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                        .buildUpon()
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                        .build()
+                    onDismiss()
+                },
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isSelected) dialogColors.selectedColor else dialogColors.textColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (subtitle != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isSelected) dialogColors.selectedColor.copy(alpha = 0.7f) else dialogColors.textColor.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+        }
+
+        trackGroups.forEach { (group, trackIndex) ->
+            val format = group.getTrackFormat(trackIndex)
+            val selected = group.isTrackSelected(trackIndex)
+            when (trackType) {
+                C.TRACK_TYPE_VIDEO -> {
+                    val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
+                    val fps = if (format.frameRate > 0) " • ${format.frameRate.toInt()} fps" else ""
+                    val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
+                    val label = if (format.width > 0 && format.height > 0) {
+                        "${format.width}x${format.height}$bitrate$fps"
+                    } else {
+                        format.label ?: "Video"
+                    }
+                    PlayerChoiceRow(
+                        label = label,
+                        subtitle = codec.ifEmpty { null }?.let { "Codec: $it" },
+                        selected = selected,
+                        onClick = { selectOverride(group, trackIndex) },
                     )
                 }
-            }
-        }
-        // Minimal thin separator between options.
-        HorizontalDivider(
-            color = dialogColors.textColor.copy(alpha = 0.08f),
-            thickness = 0.6.dp,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
-    }
-}
-
-@Composable
-fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(targetOffsetY = { -50 }, animationSpec = tween(300)),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(top = 64.dp)
-                    .background(Color.Black.copy(alpha = 0.7f), shape = MaterialTheme.shapes.large)
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                Text(
-                    text = text,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge
+                C.TRACK_TYPE_AUDIO -> {
+                    val lang = format.language?.uppercase() ?: "Unknown"
+                    val trackLabel = format.label ?: ""
+                    val channels = when (format.channelCount) {
+                        1 -> "Mono"
+                        2 -> "Stereo"
+                        6 -> "5.1 Surround"
+                        8 -> "7.1 Surround"
+                        in 3..5 -> "${format.channelCount}ch"
+                        else -> ""
+                    }
+                    val subInfo = buildList {
+                        if (channels.isNotEmpty()) add(channels)
+                        if (format.bitrate > 0) add("${format.bitrate / 1000} kbps")
+                        if (format.sampleRate > 0) add("${format.sampleRate / 1000} kHz")
+                        format.sampleMimeType?.substringAfter("/")?.let { add(it.uppercase()) }
+                    }.joinToString(" • ")
+                    PlayerChoiceRow(
+                        label = buildString {
+                            append(lang)
+                            if (trackLabel.isNotEmpty()) append(" • $trackLabel")
+                        },
+                        subtitle = subInfo.ifEmpty { null },
+                        selected = selected,
+                        onClick = { selectOverride(group, trackIndex) },
+                    )
+                }
+                C.TRACK_TYPE_TEXT -> {
+                    val lang = format.language?.uppercase() ?: "Unknown"
+                    val trackLabel = format.label ?: ""
+                    val flags = buildList {
+                        if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) add("Forced")
+                        if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) add("SDH")
+                        if ((format.roleFlags and C.ROLE_FLAG_CAPTION) != 0) add("Caption")
+                        if ((format.roleFlags and C.ROLE_FLAG_DUB) != 0) add("Dub")
+                        if ((format.roleFlags and C.ROLE_FLAG_COMMENTARY) != 0) add("Commentary")
+                        if ((format.roleFlags and C.ROLE_FLAG_EASY_TO_READ) != 0) add("Easy Read")
+                        format.sampleMimeType?.substringAfter("/")?.let { add(it.uppercase()) }
+                    }.joinToString(" • ")
+                    PlayerChoiceRow(
+                        label = buildString {
+                            append(lang)
+                            if (trackLabel.isNotEmpty() && trackLabel != lang) append(" • $trackLabel")
+                        },
+                        subtitle = flags.ifEmpty { null },
+                        selected = selected,
+                        onClick = { selectOverride(group, trackIndex) },
+                    )
+                }
+                else -> PlayerChoiceRow(
+                    label = format.label ?: "Track $trackIndex",
+                    subtitle = null,
+                    selected = selected,
+                    onClick = { selectOverride(group, trackIndex) },
                 )
             }
         }
+
+        if (trackGroups.isEmpty() && trackType != C.TRACK_TYPE_TEXT) {
+            Text(
+                text = "No tracks available",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(8.dp),
+            )
+        }
     }
 }
 
 @Composable
-fun AspectRatioDialog(
+fun AspectRatioSheet(
     currentAspectRatio: Int,
     onAspectRatioSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
-    dialogColors: DialogColors
 ) {
     val aspectOptions = listOf(
         AspectRatioOption("Original (Fit)", AspectRatioFrameLayout.RESIZE_MODE_FIT),
@@ -2103,86 +1782,23 @@ fun AspectRatioDialog(
         AspectRatioOption("18:9", 9),
         AspectRatioOption("19:9", 5),
         AspectRatioOption("20:9", 6),
-        AspectRatioOption("21:9", 7)
+        AspectRatioOption("21:9", 7),
     )
-    
-    // FIXED size - same as other dialogs
-    val dialogWidth = 460.dp
-    val dialogHeight = 400.dp
-    
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
-        )
-    ) {
-        Surface(
-            modifier = Modifier
-                .width(dialogWidth)
-                .height(dialogHeight)
-                .clip(RoundedCornerShape(20.dp)),
-            color = dialogColors.backgroundColor,
-            tonalElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Title
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Aspect Ratio",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = dialogColors.textColor,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                
-                HorizontalDivider(
-                    color = dialogColors.textColor.copy(alpha = 0.12f),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-                
-                // Options list
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(vertical = 8.dp)
-                ) {
-                    items(aspectOptions) { option ->
-                        TrackOption(
-                            label = option.label,
-                            subtitle = null,
-                            isSelected = currentAspectRatio == option.value,
-                            dialogColors = dialogColors,
-                            onClick = { onAspectRatioSelected(option.value) }
-                        )
-                    }
-                }
-            }
+    PlayerTrackSheet(title = "Aspect ratio", onDismiss = onDismiss) {
+        aspectOptions.forEach { option ->
+            PlayerChoiceRow(
+                label = option.label,
+                subtitle = null,
+                selected = currentAspectRatio == option.value,
+                onClick = {
+                    onAspectRatioSelected(option.value)
+                    onDismiss()
+                },
+            )
         }
     }
 }
 
-data class AspectRatioOption(
-    val label: String,
-    val value: Int
-)
-
-/**
- * Applies the subtitle preferences to a media3 [SubtitleView].
- *
- * When [useSystemCaptionStyle] is enabled the style and text size come from the
- * device's captioning preferences (`CaptioningManager`); otherwise the app's own
- * font / bold / background / size settings are used.
- */
 private fun applySubtitleStyle(
     subtitleView: SubtitleView,
     context: Context,
