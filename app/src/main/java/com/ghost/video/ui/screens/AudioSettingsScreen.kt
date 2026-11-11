@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -106,6 +107,9 @@ fun AudioSettingsScreen(
                 .padding(horizontal = 16.dp),
         ) {
             ListSectionTitle(text = stringResource(id = R.string.playback))
+            // The first group, which is the language row and its picker: the
+            // picker belongs to that row, so it opens between it and the switch
+            // below rather than several rows further down.
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
@@ -116,8 +120,53 @@ fun AudioSettingsScreen(
                     enabled = true,
                     onClick = { showLanguageOptions = !showLanguageOptions },
                     isFirstItem = true,
+                    // The chevron states what the row does and which way it is
+                    // pointing while the picker is open.
+                    trailingContent = {
+                        Icon(
+                            imageVector = NextIcons.ChevronDown,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .graphicsLayer {
+                                    rotationZ = if (showLanguageOptions) 180f else 0f
+                                },
+                        )
+                    },
                 )
+
+                // The picker, directly under the row that owns it — this app
+                // never opens a dialog for a preference, and a list of languages
+                // parked under the last switch reads as a setting of its own.
+                AnimatedVisibility(
+                    visible = showLanguageOptions,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    InlineOptionGroup {
+                        LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                            items(languages) { (label, code) ->
+                                RadioTextButton(
+                                    text = label,
+                                    selected = code == preferredAudioLanguage,
+                                    onClick = {
+                                        viewModel.setPreferredAudioLanguage(code)
+                                        showLanguageOptions = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The switches, in their own group — which is what the hairline
+            // between the two groups is for.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
                 PreferenceSwitch(
+                    isFirstItem = true,
                     title = stringResource(id = R.string.require_audio_focus),
                     description = stringResource(id = R.string.require_audio_focus_desc),
                     icon = NextIcons.Focus,
@@ -144,30 +193,9 @@ fun AudioSettingsScreen(
                     icon = NextIcons.VolumeUp,
                     isChecked = volumeBoost,
                     onClick = { viewModel.setVolumeBoostEnabled(!volumeBoost) },
+                    isFirstItem = true,
                     isLastItem = true,
                 )
-            }
-
-            // Inline picker (this app never opens a dialog for preferences).
-            AnimatedVisibility(
-                visible = showLanguageOptions,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                InlineOptionGroup(modifier = Modifier.padding(top = 8.dp)) {
-                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(languages) { (label, code) ->
-                            RadioTextButton(
-                                text = label,
-                                selected = code == preferredAudioLanguage,
-                                onClick = {
-                                    viewModel.setPreferredAudioLanguage(code)
-                                    showLanguageOptions = false
-                                },
-                            )
-                        }
-                    }
-                }
             }
         }
     }

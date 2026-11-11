@@ -23,6 +23,14 @@ object MusicArtworkLoader {
         appContext = context.applicationContext
     }
 
+    /**
+     * The artwork for [uri] if this process has already decoded it, without
+     * touching the file. The mini player and the full player both come through
+     * here, so opening the player can paint a sleeve it already has on its first
+     * frame rather than blanking it and fading one in.
+     */
+    fun cached(uri: String): Bitmap? = ThumbnailCache.get("audio:$uri")
+
     suspend fun load(uri: String, targetPx: Int = 512): Bitmap? = withContext(Dispatchers.IO) {
         val cacheKey = "audio:$uri"
         ThumbnailCache.get(cacheKey)?.let { return@withContext it }
