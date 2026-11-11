@@ -42,6 +42,14 @@ PATH_RULES = [
     ("tooling", r"(\.github/|gradle|build\.gradle|gradlew|scripts/|docs/)"),
 ]
 
+# Commits that only touch documentation or repository assets are not part of a
+# build; listing them would drown the real changes.
+NOISE_PATHS = re.compile(r"^(README|docs/|assets/|\.github/ISSUE|LICENSE|\.gitignore)", re.IGNORECASE)
+NOISE_SUBJECTS = re.compile(
+    r"^(add files via upload|delete |update .*\.md$|create .*\.md$|rename .*\.md)",
+    re.IGNORECASE,
+)
+
 CONVENTIONAL = re.compile(
     r"^(feat|fix|perf|refactor|docs|test|build|ci|chore|style)(\(([^)]+)\))?!?:\s*(.+)$"
 )
@@ -69,12 +77,45 @@ def subject(sha: str) -> str:
     return run("git", "log", "-1", "--pretty=%s", sha)
 
 
+def is_noise(files: list[str], subject_text: str) -> bool:
+    if NOISE_SUBJECTS.match(subject_text):
+        return True
+    return bool(files) and all(NOISE_PATHS.match(path) for path in files)
+
+
+def curated_section(notes_file: str, version: str) -> list[str]:
+    """Return the hand-written changelog section for [version], if present."""
+    if not os.path.exists(notes_file):
+        return []
+    wanted = version.lstrip("v").strip()
+    lines: list[str] = []
+    inside = False
+    for raw in open(notes_file, encoding="utf-8"):
+        line = raw.rstrip()
+        if line.startswith("## "):
+            inside = line[3:].strip() == wanted
+            continue
+        if inside:
+            lines.append(line)
+    return lines + [""] if lines else []
+
+
 def section_for(files: list[str]) -> str:
-    joined = " ".join(files)
-    for name, pattern in PATH_RULES:
-        if re.search(pattern, joined, re.IGNORECASE):
-            return name
-    return "other"
+    """Classify by the area that most of the changed paths belong to."""
+    counts: dict[str, int] = {}
+    for path in files:
+        for name, pattern in PATH_RULES:
+            if re.search(pattern, path, re.IGNORECASE):
+                counts[name] = counts.get(name, 0) + 1
+                break
+    if not counts:
+        return "other"
+    # Interface changes dominate when a commit touches both UI and player code,
+    # which is what a feature commit usually does.
+    for preferred in ("interface", "player", "codec", "network", "update", "tooling"):
+        if counts.get(preferred, 0) >= max(1, max(counts.values()) - 1):
+            return preferred
+    return max(counts, key=counts.get)
 
 
 def humanise(text: str) -> str:
@@ -94,6 +135,19 @@ def main() -> int:
     notes_file = os.environ.get("NOTES_FILE", "docs/CHANGELOG.md")
     out_file = os.environ.get("OUT_FILE", "ci/changelog_section.md")
 
+    curated = curated_section(notes_file, cur)
+    if curated:
+        lines = curated
+        if prev and repo:
+            lines.append(f"**Full diff**: https://github.com/{repo}/compare/{prev}...{cur}")
+            lines.append("")
+        text = "\n".join(lines)
+        os.makedirs(os.path.dirname(out_file) or ".", exist_ok=True)
+        with open(out_file, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        print(text)
+        return 0
+
     commits = changed_files(prev, cur)
     grouped: dict[str, list[str]] = {key: [] for key in SECTION_TITLES}
     seen: set[str] = set()
@@ -105,6 +159,8 @@ def main() -> int:
         seen.add(raw)
         # Release commits and formatting-only noise are not user-facing changes.
         if re.match(r"^(Merge |Revert )", raw):
+            continue
+        if is_noise(files, raw):
             continue
         section = section_for(files)
         grouped[section].append(humanise(raw))
