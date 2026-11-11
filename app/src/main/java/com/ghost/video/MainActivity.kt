@@ -50,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.ghost.video.viewmodel.AudioViewModel
@@ -59,6 +60,8 @@ import com.ghost.video.ui.screens.AudioSettingsScreen
 import com.ghost.video.ui.screens.UpdatesScreen
 import com.ghost.video.viewmodel.UpdatesViewModel
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -89,15 +92,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.IconButton
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -268,6 +264,10 @@ class MainActivity : ComponentActivity() {
             repo.cleanupLegacyPerUrlKeys()
         }
 
+        // Album art is decoded off the main thread with a ContentResolver, so the
+        // loader needs the application context once per process.
+        com.ghost.video.data.MusicArtworkLoader.install(applicationContext)
+
         // Previously this gate blocked the first frame until DataStore returned
         // the saved theme, which froze the app for 1-2s on cold starts (blank
         // screen). The UI now composes immediately with fallback defaults, so the
@@ -377,96 +377,56 @@ fun MainApp(
                         currentRoute != "player/{url}" &&
                         currentRoute != "audio_player"
 
-                // A flat, compact mini player: no glass shader, entrance animation,
-                // stacked gesture detectors, elevation, or extra settings observer.
-                if (showMiniPlayer && miniPlayerAudio != null) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                                .clickable {
-                                    navController.navigate("audio_player") { launchSingleTop = true }
-                                },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 7.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Music icon
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        painterResource(id = R.drawable.ic_music),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        miniPlayerAudio.name,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    if (!miniPlayerAudio.artist.isNullOrEmpty() && miniPlayerAudio.artist != "<unknown>") {
-                                        Text(
-                                            miniPlayerAudio.artist,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                // Previous
-                                IconButton(onClick = { audioViewModel.skipToPrevious() }) {
-                                    Icon(
-                                        Icons.Default.SkipPrevious,
-                                        contentDescription = "Previous",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                // Play/Pause
-                                IconButton(onClick = { audioViewModel.togglePlayPause() }) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Play/Pause",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                // Next
-                                IconButton(onClick = { audioViewModel.skipToNext() }) {
-                                    Icon(
-                                        Icons.Default.SkipNext,
-                                        contentDescription = "Next",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                // Close/Stop
-                                IconButton(onClick = { audioViewModel.stop(context) }) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Close",
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
+                // Expressive mini player: swipe up (or tap) to open the full
+                // audio player, swipe down to dismiss, spring press feedback on
+                // every control. Motion lives in MiniAudioPlayer so the bottom bar
+                // stays a layout container.
+                AnimatedVisibility(
+                    visible = showMiniPlayer && miniPlayerAudio != null,
+                    enter = com.ghost.video.ui.components.miniPlayerEnter(),
+                    exit = com.ghost.video.ui.components.miniPlayerExit(),
+                ) {
+                    if (miniPlayerAudio != null) {
+                        val artwork = com.ghost.video.ui.components.rememberMiniPlayerArtwork(miniPlayerAudio.uri)
+                        val progress = remember(miniPlayerAudio.uri, isPlaying) {
+                            mutableFloatStateOf(0f)
+                        }
+                        // Lightweight position poll: 1 Hz while playing, one read
+                        // when paused. No ExoPlayer listener plumbing needed for a
+                        // 3 dp progress line.
+                        LaunchedEffect(miniPlayerAudio.uri, isPlaying) {
+                            progress.floatValue = runCatching {
+                                val duration = audioViewModel.getDuration()
+                                if (duration > 0) {
+                                    audioViewModel.getCurrentPosition().toFloat() / duration
+                                } else 0f
+                            }.getOrDefault(0f)
+                            while (isPlaying) {
+                                delay(1000)
+                                progress.floatValue = runCatching {
+                                    val duration = audioViewModel.getDuration()
+                                    if (duration > 0) {
+                                        audioViewModel.getCurrentPosition().toFloat() / duration
+                                    } else 0f
+                                }.getOrDefault(progress.floatValue)
                             }
                         }
+                        com.ghost.video.ui.components.MiniAudioPlayer(
+                            title = miniPlayerAudio.name,
+                            artist = miniPlayerAudio.artist,
+                            isPlaying = isPlaying,
+                            progress = progress.floatValue,
+                            artwork = artwork,
+                            onOpen = {
+                                navController.navigate("audio_player") { launchSingleTop = true }
+                            },
+                            onTogglePlayPause = { audioViewModel.togglePlayPause() },
+                            onPrevious = { audioViewModel.skipToPrevious() },
+                            onNext = { audioViewModel.skipToNext() },
+                            onDismiss = { audioViewModel.stop(context) },
+                        )
                     }
+                }
 
                 // Slide + fade the bottom nav in/out when moving between the tab
                 // screens and the deeper pages. A hard cut here is what makes Back
@@ -814,11 +774,35 @@ private fun UpdatesGate(viewModel: UpdatesViewModel) {
             onDismissRequest = { dialogRelease = null },
             title = { Text("Update available") },
             text = {
-                Text(
-                    text = "${release.label} is available." + if (compatible) "" else
-                        "\n\nThis release has a different signing key. Android may require " +
-                        "uninstalling the current app first, which removes local settings.",
-                )
+                Column(
+                    // Release notes can be long: keep the dialog on screen and make
+                    // the changelog itself scrollable (the buttons never scroll away).
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                ) {
+                    Text("${release.label} is available.")
+                    if (release.notes.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "What's new",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = release.notes,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (!compatible) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "This release has a different signing key. Android may require " +
+                                "uninstalling the current app first, which removes local settings.",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
