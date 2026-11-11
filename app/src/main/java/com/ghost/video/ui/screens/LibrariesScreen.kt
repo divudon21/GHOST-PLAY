@@ -75,12 +75,14 @@ fun LibrariesScreen(onBack: () -> Unit = {}) {
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = innerPadding +
-                PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    bottom = tabBarClearance(),
-                ),
+            // PaddingValues has no '+' operator in this Compose version, so the
+            // Scaffold's insets are unpacked here rather than added.
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = innerPadding.calculateTopPadding(),
+                bottom = innerPadding.calculateBottomPadding() + tabBarClearance(),
+            ),
             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
         ) {
             itemsIndexed(libraries, key = { _, library -> library.name }) { index, library ->

@@ -1,6 +1,7 @@
 package com.ghost.video.ui.screens
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
@@ -51,6 +52,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmapOrNull
 import com.ghost.video.R
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.NextTopAppBar
@@ -270,8 +272,15 @@ private fun Context.appVersion(): String {
     return "${packageInfo.versionName} ($versionCode)"
 }
 
-private fun Context.appIcon(): android.graphics.drawable.Drawable? = try {
-    packageManager.getApplicationIcon(packageName)
+/**
+ * The launcher icon as a bitmap, NextPlayer's way: the application info's icon
+ * loaded and converted. Rendering the `@mipmap/ic_launcher` adaptive layer
+ * directly would return the unmasked layers, not the icon.
+ */
+private fun Context.appIcon(): Bitmap? = try {
+    packageManager.getApplicationInfo(packageName, 0)
+        .loadIcon(packageManager)
+        ?.toBitmapOrNull()
 } catch (e: PackageManager.NameNotFoundException) {
     null
 }
