@@ -5,6 +5,32 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.28 (beta)
+
+### Player — sheets instead of dialogs
+- **Audio sync and pitch is a Material 3 modal bottom sheet.** It can be dragged
+  down and dismissed with a swipe (and stops at half height on the way), so the
+  picture stays visible while the two values are judged by ear. Each control is
+  now a value, a −/+ stepper and a slider: the slider for a rough move, the
+  steppers for the one tick that matters, because a swipe cannot land on exactly
+  "0 ms". "Reset to default" appears only when a control is off its default.
+- **Every track picker is a sheet too** — video quality, audio track, subtitles
+  and aspect ratio were four copies of a fixed 460x400 dialog with a separate
+  hand-rolled dark/light palette. They now share one `PlayerTrackSheet` whose
+  height follows its rows, on the app's own colour scheme.
+- **Selection rows are Material 3.** `RadioButton` in a selectable `Surface` with
+  the tonal container and a check/empty-check glyph, instead of a custom row with
+  hard-coded accent colours (`#BB86FC`, `#6200EE`).
+
+### Player — controls
+- **The mute control is a Material 3 icon that reacts.** It was an `ImageView`
+  stamped into `exo_basic_controls` with a hand-drawn vector swapped on click, so
+  its icon only ever knew what it had last been told and could not follow a
+  volume change from anywhere else. It is now a Media3 custom layout holding a
+  composable, driven by a `Player.Listener` that reads the player's volume: the
+  glyph turns over between Material 3's `VolumeOff` and `VolumeUp` on every change,
+  including this screen's own toggle, a gesture and a track switch.
+
 ## 3.27 (beta)
 
 ### Fixes

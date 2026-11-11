@@ -17,6 +17,8 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.BrightnessHigh
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CenterFocusStrong
@@ -197,6 +199,10 @@ object NextIcons {
     val Copy = Icons.Rounded.ContentCopy
     val Move = Icons.AutoMirrored.Rounded.DriveFileMove
     val ExtraSettings = Icons.Rounded.MiscellaneousServices
+    // Player: the mute control changes glyph with its state, so both halves are
+    // Material 3's own volume icons.
+    val VolumeOff = Icons.Rounded.VolumeOff
+    val Remove = Icons.Rounded.Remove
     val MoreVert = Icons.Rounded.MoreVert
     val More = Icons.Rounded.MoreHoriz
     val DeleteSweep = Icons.Rounded.DeleteSweep
