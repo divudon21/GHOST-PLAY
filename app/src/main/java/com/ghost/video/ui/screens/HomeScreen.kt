@@ -77,6 +77,7 @@ import com.ghost.video.data.ThumbnailStrategy
 import com.ghost.video.data.ViewLayout
 import com.ghost.video.data.VideoThumbnailPipeline
 import com.ghost.video.ui.components.AppLoadingIndicator
+import com.ghost.video.ui.components.NetworkStreamCard
 import com.ghost.video.ui.components.NextTopAppBar
 import com.ghost.video.ui.components.EmptyState
 import com.ghost.video.ui.components.tabSwipe
@@ -88,30 +89,10 @@ import coil3.video.videoFrameMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Image
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.KeyboardType
-import kotlinx.coroutines.delay
 
 data class LocalVideo(
     val id: Long,
@@ -139,11 +120,9 @@ fun HomeScreen(
     // the URL field and the open panels because plain remember is not preserved
     // when the destination leaves composition.
     var url by rememberSaveable { mutableStateOf("") }
-    var showUrlInput by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val focusManager = LocalFocusManager.current
-    val haptics = LocalHapticFeedback.current
     // Cache keeps the list alive across tab switches, so coming back to Home
     // does NOT re-query MediaStore (the old reload caused tab-switch jitter).
     var localVideos by remember { mutableStateOf(cachedVideos ?: emptyList()) }
@@ -213,6 +192,28 @@ fun HomeScreen(
         context.startActivity(intent)
     }
 
+    // One stream card instance shared by every layout (grid, compact, list,
+    // cinema) and by the empty / permission states, so the URL box is always one
+    // composable and behaves identically no matter where it is rendered.
+    val streamCard: @Composable () -> Unit = {
+        NetworkStreamCard(
+            modifier = Modifier.padding(bottom = 4.dp),
+            title = "Network stream",
+            description = "Choose a video file from network and play.",
+            placeholder = "http://example.com/stream.mp4",
+            actionLabel = "Open network stream",
+            url = url,
+            onUrlChange = { url = it },
+            onOpenStream = {
+                if (url.isNotBlank()) {
+                    onPlayUrl(url.trim())
+                    focusManager.clearFocus()
+                }
+            },
+            enabled = url.isNotBlank(),
+        )
+    }
+
     // Same chrome as the Settings tab: a Scaffold painting surfaceContainer
     // edge-to-edge (behind the status bar / notch) with the shared NextTopAppBar
     // component and FilledTonalIconButton actions.
@@ -262,80 +263,6 @@ fun HomeScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // Expressive toggle: the container shape and colour morph while
-                    // the icon crossfades/scales, so the action reacts instead of
-                    // silently switching a boolean.
-                    val urlToggleInteraction = remember { MutableInteractionSource() }
-                    val urlToggleSelected by urlToggleInteraction.collectIsPressedAsState()
-                    val urlIconAlpha by animateFloatAsState(
-                        targetValue = if (showUrlInput) 1f else 0f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                        label = "urlIconAlpha"
-                    )
-                    val urlIconScale by animateFloatAsState(
-                        targetValue = if (showUrlInput) 1f else 0.84f,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                        label = "urlIconScale"
-                    )
-                    Surface(
-                        onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            showUrlInput = !showUrlInput
-                            if (!showUrlInput) focusManager.clearFocus()
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .graphicsLayer {
-                                // Press feedback straight on the button itself.
-                                val press = if (urlToggleSelected) 0.92f else 1f
-                                scaleX = press
-                                scaleY = press
-                            }
-                            .semantics { role = Role.Button },
-                        // Circle when the box is open, squircle when closed: the
-                        // corner radius itself is animated, which is what
-                        // Material 3 Expressive shape morphs do.
-                        shape = RoundedCornerShape(
-                            animateDpAsState(
-                                targetValue = if (showUrlInput) 20.dp else 14.dp,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
-                                label = "urlButtonCorner"
-                            ).value
-                        ),
-                        color = animateColorAsState(
-                            targetValue = if (showUrlInput) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            },
-                            animationSpec = spring(),
-                            label = "urlButtonColor"
-                        ).value,
-                        interactionSource = urlToggleInteraction
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_url),
-                                contentDescription = if (showUrlInput) "Hide URL box" else "Add URL",
-                                tint = animateColorAsState(
-                                    targetValue = if (showUrlInput) {
-                                        MaterialTheme.colorScheme.onPrimary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    },
-                                    animationSpec = spring(),
-                                    label = "urlIconTint"
-                                ).value,
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer {
-                                        scaleX = urlIconScale
-                                        scaleY = urlIconScale
-                                        alpha = 0.6f + 0.4f * urlIconAlpha
-                                    }
-                            )
-                        }
-                    }
                 }
             )
         }
@@ -346,242 +273,10 @@ fun HomeScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-        AnimatedVisibility(
-            visible = showUrlInput,
-            enter = fadeIn(animationSpec = tween(260)) +
-                expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)),
-            exit = fadeOut(animationSpec = tween(180)) + shrinkVertically(animationSpec = tween(200))
-        ) {
-            val urlFocus = remember { FocusRequester() }
-            val urlInteraction = remember { MutableInteractionSource() }
-            val urlFocused by urlInteraction.collectIsFocusedAsState()
-
-            // The field takes focus as soon as it slides in, so the keyboard is
-            // there and the user can paste straight away.
-            LaunchedEffect(showUrlInput) {
-                if (showUrlInput) {
-                    delay(260)
-                    runCatching { urlFocus.requestFocus() }
-                }
-            }
-
-            Surface(
-                // Expressive container: it lifts and tints itself the moment the
-                // field is focused, and settles back when the keyboard closes.
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp)
-                    .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)),
-                shape = RoundedCornerShape(
-                    animateDpAsState(
-                        targetValue = if (urlFocused) 24.dp else 16.dp,
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
-                        label = "urlFieldCorner"
-                    ).value
-                ),
-                color = animateColorAsState(
-                    targetValue = if (urlFocused) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
-                    animationSpec = spring(),
-                    label = "urlFieldColor"
-                ).value,
-                tonalElevation = animateDpAsState(
-                    targetValue = if (urlFocused) 3.dp else 0.dp,
-                    animationSpec = spring(),
-                    label = "urlFieldElevation"
-                ).value,
-                shadowElevation = animateDpAsState(
-                    targetValue = if (urlFocused) 2.dp else 0.dp,
-                    animationSpec = spring(),
-                    label = "urlFieldShadow"
-                ).value
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Link,
-                        contentDescription = null,
-                        tint = if (urlFocused) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(20.dp)
-                    )
-                    BasicTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(urlFocus)
-                            .semantics { contentDescription = "Video URL" },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        interactionSource = urlInteraction,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            autoCorrectEnabled = false,
-                            imeAction = ImeAction.Go
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onGo = {
-                                if (url.isNotEmpty()) onPlayUrl(url)
-                                focusManager.clearFocus()
-                            }
-                        ),
-                        decorationBox = { innerTextField ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (url.isEmpty()) {
-                                    Text(
-                                        text = "Paste or type a video link",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        }
-                    )
-
-                    // Clear / paste: both are expressive shrink-to-fit icon buttons.
-                    AnimatedVisibility(visible = url.isNotEmpty()) {
-                        IconButton(onClick = { url = "" }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear URL",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    AnimatedVisibility(visible = url.isEmpty()) {
-                        val pasteInteraction = remember { MutableInteractionSource() }
-                        val pastePressed by pasteInteraction.collectIsPressedAsState()
-                        Surface(
-                            onClick = {
-                                clipboardManager.getText()?.text?.let { url = it }
-                            },
-                            interactionSource = pasteInteraction,
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier
-                                .height(40.dp)
-                                .graphicsLayer {
-                                    val scale = if (pastePressed) 0.94f else 1f
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentPaste,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = "Paste",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                        }
-                    }
-
-                    // The primary action: filled, spring-scaled, disabled while empty.
-                    val playInteraction = remember { MutableInteractionSource() }
-                    val playPressed by playInteraction.collectIsPressedAsState()
-                    val playEnabled = url.isNotEmpty()
-                    Surface(
-                        onClick = {
-                            onPlayUrl(url)
-                            focusManager.clearFocus()
-                        },
-                        enabled = playEnabled,
-                        interactionSource = playInteraction,
-                        shape = RoundedCornerShape(
-                            animateDpAsState(
-                                targetValue = if (playPressed) 18.dp else 14.dp,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                                label = "urlPlayCorner"
-                            ).value
-                        ),
-                        color = animateColorAsState(
-                            targetValue = if (playEnabled) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest
-                            },
-                            animationSpec = spring(),
-                            label = "urlPlayColor"
-                        ).value,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .graphicsLayer {
-                                val scale = if (playPressed) 0.9f else 1f
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Play URL",
-                                tint = if (playEnabled) {
-                                    MaterialTheme.colorScheme.onPrimary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Supported-protocol hint. Reads as an expressive chip row rather
-                // than a paragraph, so the box explains itself without the user
-                // having to open the player to find out what is accepted.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 14.dp, end = 14.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf("http(s)", "HLS", "DASH", "RTSP", "RTMP", "MKV").forEach { label ->
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                }
-                }  // end of the field Column
-            }
-        }
-        
         Spacer(modifier = Modifier.height(16.dp))
         
         if (!hasPermission) {
+            streamCard()
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -633,6 +328,7 @@ fun HomeScreen(
                 }
             }
         } else if (localVideos.isEmpty()) {
+            streamCard()
             EmptyState(
                 icon = Icons.Default.VideoFile,
                 title = "No videos found",
@@ -652,6 +348,9 @@ fun HomeScreen(
                         contentPadding = PaddingValues(vertical = 4.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        item {
+                            streamCard()
+                        }
                         items(filteredVideos, key = { it.uri }) { video ->
                             VideoListItem(
                                 video = video,
@@ -670,6 +369,9 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        item(span = { GridItemSpan(2) }) {
+                            streamCard()
+                        }
                         items(filteredVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
@@ -690,6 +392,9 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        item(span = { GridItemSpan(2) }) {
+                            streamCard()
+                        }
                         items(filteredVideos, key = { it.uri }) { video ->
                             VideoThumbnailCard(
                                 video = video,
@@ -711,6 +416,9 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        item(span = { GridItemSpan(2) }) {
+                            streamCard()
+                        }
                         if (filteredVideos.isNotEmpty()) {
                             item(span = { GridItemSpan(2) }) {
                                 val video = filteredVideos.first()
