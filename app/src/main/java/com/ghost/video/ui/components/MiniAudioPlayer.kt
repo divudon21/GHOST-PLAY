@@ -24,15 +24,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,6 +126,10 @@ fun MiniAudioPlayer(
         onPull = {
             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
             onOpen()
+        },
+        onDismiss = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onDismiss()
         },
         lift = lift,
         settle = settle,
@@ -308,7 +315,8 @@ private fun Modifier.miniPlayerGestures(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onPull: () -> Unit,
-    lift: androidx.compose.runtime.MutableFloatStateOf,
+    onDismiss: () -> Unit,
+    lift: MutableFloatStateOf,
     settle: Array<Job?>,
     scope: kotlinx.coroutines.CoroutineScope,
 ): Modifier {
@@ -376,8 +384,10 @@ private fun Modifier.miniPlayerGestures(
                 0f
             }
             // A pull that carried the bar most of the way up, or that was thrown
-            // upwards, meant the player — everything else springs home.
+            // upwards, meant the player; a drag that carried it down as far meant
+            // "put it away"; everything else springs home having meant nothing.
             val committed = pulled > liftEase * PULL_COMMIT_SHARE || velocity < -PULL_FLICK_VELOCITY
+            val dismissed = !committed && pulled < -liftEase * PULL_COMMIT_SHARE
             target.release(velocity)
             val from = lift.floatValue
             settle[0] = scope.launch {
@@ -389,7 +399,10 @@ private fun Modifier.miniPlayerGestures(
                         stiffness = Spring.StiffnessMediumLow,
                     ),
                 ) { value, _ -> lift.floatValue = value }
-                if (committed) onPull()
+                when {
+                    committed -> onPull()
+                    dismissed -> onDismiss()
+                }
             }
         }
     }.graphicsLayer { translationY = -lift.floatValue }

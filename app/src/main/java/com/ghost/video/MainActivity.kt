@@ -686,7 +686,7 @@ fun MainApp(
                 NextNavigationBar(
                     isSelected = { destination -> destination.route == currentRoute },
                     onDestinationClick = { destination -> selectTab(destination) },
-                    onTopPositioned = { top -> navBarTopPx = top },
+                    onTopPositioned = { top -> top?.let { navBarTopPx = it } },
                 )
             }
 
