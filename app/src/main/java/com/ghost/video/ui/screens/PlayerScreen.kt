@@ -911,6 +911,7 @@ fun PlayerScreen(url: String) {
                         gestureBrightnessSensitivity = gestureBrightnessSensitivity,
                         gestureVolumeEnabled = gestureVolumeEnabled,
                         gestureVolumeSensitivity = gestureVolumeSensitivity,
+                        showSystemVolumePanel = showSystemVolumePanel,
                         gestureZoomEnabled = gestureZoomEnabled,
                         gesturePanEnabled = gesturePanEnabled,
                         gestureDoubleTapEnabled = gestureDoubleTapEnabled,
@@ -1328,6 +1329,8 @@ class PlayerGestureHandler(
     private val gestureBrightnessSensitivity: Float,
     private val gestureVolumeEnabled: Boolean,
     private val gestureVolumeSensitivity: Float,
+    /** "System volume panel" preference (NextPlayer `showSystemVolumePanel`). */
+    private val showSystemVolumePanel: Boolean,
     private val gestureZoomEnabled: Boolean,
     private val gesturePanEnabled: Boolean,
     private val gestureDoubleTapEnabled: Boolean,
