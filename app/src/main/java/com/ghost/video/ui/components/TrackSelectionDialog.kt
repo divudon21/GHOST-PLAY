@@ -63,23 +63,28 @@ import androidx.media3.ui.DefaultTrackNameProvider
 @Composable
 fun TrackSelectionSheet(
     player: Player,
-    trackType: Int,
+    trackTypes: List<Int>,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val nameProvider = remember(context) { DefaultTrackNameProvider(context.resources) }
     val tracks: Tracks = player.currentTracks
-    val groups = remember(tracks, trackType) { tracks.groups.filter { it.type == trackType } }
+    // Every requested type that the file actually has, in the order asked for.
+    val visibleTypes = remember(tracks, trackTypes) {
+        trackTypes.filter { type -> tracks.groups.any { it.type == type } }
+    }
 
     // Which rows are ticked. media3 allows several tracks of one type to be
     // pinned at once and switches between them, which is what the checkboxes are
     // for; "None" is a radio because it excludes everything else.
-    val pinned = remember(tracks, trackType) {
+    val pinned = remember(tracks, visibleTypes) {
         buildSet {
-            groups.forEach { group ->
-                for (i in 0 until group.length) {
-                    if (group.isTrackSelected(i)) add(group.mediaTrackGroup to i)
+            for (type in visibleTypes) {
+                tracks.groups.filter { it.type == type }.forEach { group ->
+                    for (i in 0 until group.length) {
+                        if (group.isTrackSelected(i)) add(group.mediaTrackGroup to i)
+                    }
                 }
             }
         }
@@ -97,7 +102,7 @@ fun TrackSelectionSheet(
                 .padding(bottom = 16.dp),
         ) {
             Text(
-                text = trackTypeTitle(trackType),
+                text = visibleTypes.joinToString(" and ") { trackTypeTitle(it) },
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 16.dp),
@@ -114,62 +119,89 @@ fun TrackSelectionSheet(
                     .verticalScroll(rememberScrollState())
                     .selectableGroup(),
             ) {
-                // "None" — media3's Disable.
-                SelectableRow(
-                    selected = pinned.isEmpty(),
-                    onClick = {
-                        player.trackSelectionParameters = player.trackSelectionParameters
-                            .buildUpon()
-                            .setTrackTypeDisabled(trackType, true)
-                            .clearOverridesOfType(trackType)
-                            .build()
-                        onDismiss()
-                    },
-                    label = "None",
-                ) { RadioButton(selected = pinned.isEmpty(), onClick = null) }
-
-                groups.forEach { group ->
-                    for (index in 0 until group.length) {
-                        val mediaGroup = group.mediaTrackGroup
-                        val isPinned = (mediaGroup to index) in pinned
-                        val label = nameProvider.getTrackName(group.getTrackFormat(index))
-                        SelectableRow(
-                            selected = isPinned,
-                            label = label,
-                            onClick = {
-                                val now = if (isPinned) {
-                                    pinned - (mediaGroup to index)
-                                } else {
-                                    pinned + (mediaGroup to index)
-                                }
-                                player.trackSelectionParameters = player
-                                    .trackSelectionParameters
-                                    .buildUpon()
-                                    .setTrackTypeDisabled(trackType, false)
-                                    .clearOverridesOfType(trackType)
-                                    .apply {
-                                        now.groupBy({ it.first }, { it.second })
-                                            .forEach { (group, indices) ->
-                                                addOverride(
-                                                    TrackSelectionOverride(group, indices)
-                                                )
-                                            }
-                                    }
-                                    .build()
-                                // Ticking a track is the choice; the panel stays up
-                                // so a second one can be added, as in the reference.
-                            },
-                        ) { Checkbox(checked = isPinned, onCheckedChange = null) }
+                visibleTypes.forEachIndexed { typeIndex, trackType ->
+                    val groups = tracks.groups.filter { it.type == trackType }
+                    if (visibleTypes.size > 1) {
+                        // One heading per list when more than one is shown, so the
+                        // two kinds of track are not read as one column of
+                        // choices.
+                        Text(
+                            text = trackTypeHeading(trackType),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(start = 16.dp)
+                                .padding(top = if (typeIndex == 0) 0.dp else 12.dp, bottom = 2.dp),
+                        )
                     }
-                }
 
-                if (groups.isEmpty()) {
-                    Text(
-                        text = "No tracks available",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
+                    // "None" — media3's Disable. Only for a single list: with two
+                    // lists on the panel, a "None" between them would be ambiguous.
+                    if (visibleTypes.size == 1) {
+                        SelectableRow(
+                            selected = pinned.none { it.first.type == trackType },
+                            label = "None",
+                            onClick = {
+                                player.trackSelectionParameters = player.trackSelectionParameters
+                                    .buildUpon()
+                                    .setTrackTypeDisabled(trackType, true)
+                                    .clearOverridesOfType(trackType)
+                                    .build()
+                                onDismiss()
+                            },
+                            control = {
+                                RadioButton(
+                                    selected = pinned.none { it.first.type == trackType },
+                                    onClick = null,
+                                )
+                            },
+                        )
+                    }
+
+                    groups.forEach { group ->
+                        for (index in 0 until group.length) {
+                            val mediaGroup = group.mediaTrackGroup
+                            val isPinned = (mediaGroup to index) in pinned
+                            val label = nameProvider.getTrackName(group.getTrackFormat(index))
+                            SelectableRow(
+                                selected = isPinned,
+                                label = label,
+                                onClick = {
+                                    val now = if (isPinned) {
+                                        pinned - (mediaGroup to index)
+                                    } else {
+                                        pinned + (mediaGroup to index)
+                                    }
+                                    player.trackSelectionParameters = player
+                                        .trackSelectionParameters
+                                        .buildUpon()
+                                        .setTrackTypeDisabled(trackType, false)
+                                        .clearOverridesOfType(trackType)
+                                        .apply {
+                                            now.filter { it.first.type == trackType }
+                                                .groupBy({ it.first }, { it.second })
+                                                .forEach { (group, indices) ->
+                                                    addOverride(
+                                                        TrackSelectionOverride(group, indices)
+                                                    )
+                                                }
+                                        }
+                                        .build()
+                                    // Ticking a track is the choice; the panel
+                                    // stays up so a second one can be added.
+                                },
+                            ) { Checkbox(checked = isPinned, onCheckedChange = null) }
+                        }
+                    }
+
+                    if (groups.isEmpty()) {
+                        Text(
+                            text = "No tracks available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }
@@ -267,8 +299,15 @@ fun VideoScaleSheet(
 }
 
 private fun trackTypeTitle(trackType: Int): String = when (trackType) {
-    C.TRACK_TYPE_VIDEO -> "Video quality"
-    C.TRACK_TYPE_AUDIO -> "Audio track"
+    C.TRACK_TYPE_VIDEO -> "Video"
+    C.TRACK_TYPE_AUDIO -> "Audio"
     C.TRACK_TYPE_TEXT -> "Subtitles"
-    else -> "Tracks"
+    else -> "Track"
+}
+
+private fun trackTypeHeading(trackType: Int): String = when (trackType) {
+    C.TRACK_TYPE_VIDEO -> "Video"
+    C.TRACK_TYPE_AUDIO -> "Audio"
+    C.TRACK_TYPE_TEXT -> "Subtitles"
+    else -> "Track"
 }

@@ -99,6 +99,7 @@ import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
 import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.ui.components.AudioAdjustSheet
+import com.ghost.video.ui.components.IndicatorOverlay
 import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.PlayerChoiceRow
 import com.ghost.video.ui.components.PlayerMuteButton
@@ -148,13 +149,17 @@ fun PlayerScreen(
     // One dialogue, two tabs: the quality and audio buttons both open it, on the
     // tab that was asked for.
     var showTrackSheet by remember { mutableStateOf(false) }
-    var trackSheetType by remember { mutableIntStateOf(C.TRACK_TYPE_VIDEO) }
+    // Which track lists a click asked for. Quality asks for video *and* audio,
+    // because they are one decision about the picture and its sound; CC asks for
+    // subtitles only.
+    var trackSheetTypes by remember {
+        mutableStateOf(listOf(C.TRACK_TYPE_VIDEO, C.TRACK_TYPE_AUDIO))
+    }
     var currentScale by remember { mutableStateOf(VideoScale.BEST_FIT) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var showAudioAdjustDialog by remember { mutableStateOf(false) }
     
-    // Aspect ratio state
-    var currentAspectRatio by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    // Video zoom, in the reference player's terms rather than a resize mode.
     var audioSyncMs by remember { mutableFloatStateOf(0f) }
     var audioPitch by remember { mutableFloatStateOf(1f) }
     var lastVolumeBeforeMute by remember { mutableFloatStateOf(1f) }
@@ -833,7 +838,7 @@ fun PlayerScreen(
                         )
                         
                         setClickFeedback {
-                            trackSheetType = C.TRACK_TYPE_VIDEO
+                            trackSheetTypes = listOf(C.TRACK_TYPE_VIDEO, C.TRACK_TYPE_AUDIO)
                             showTrackSheet = true
                         }
                     }
@@ -874,7 +879,7 @@ fun PlayerScreen(
                         )
                         
                         setClickFeedback {
-                            trackSheetType = C.TRACK_TYPE_TEXT
+                            trackSheetTypes = listOf(C.TRACK_TYPE_TEXT)
                             showTrackSheet = true
                         }
                     }
@@ -1232,7 +1237,7 @@ fun PlayerScreen(
     if (showTrackSheet && !inPip) {
         TrackSelectionSheet(
             player = exoPlayer,
-            trackType = trackSheetType,
+            trackTypes = trackSheetTypes,
             onDismiss = { showTrackSheet = false },
         )
     }
@@ -1280,50 +1285,6 @@ fun PlayerScreen(
                 exoPlayer.playbackParameters = PlaybackParameters(exoPlayer.playbackParameters.speed, 1f)
             },
             onDismiss = { showAudioAdjustDialog = false },
-        )
-    }
-    
-    // Aspect Ratio Dialog
-    if (showAspectRatioDialog && !inPip) {
-        AspectRatioSheet(
-            currentAspectRatio = currentAspectRatio,
-            onAspectRatioSelected = { ratio ->
-                currentAspectRatio = ratio
-                playerViewRef?.let { pv ->
-                    when (ratio) {
-                        AspectRatioFrameLayout.RESIZE_MODE_FIT,
-                        AspectRatioFrameLayout.RESIZE_MODE_FILL,
-                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-                        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
-                        AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> {
-                            pv.setAspectRatioListener(null)
-                            pv.resizeMode = ratio
-                        }
-                        5 -> { // 19:9
-                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                            pv.setAspectRatioListener { _, _, _ -> 19f / 9f }
-                        }
-                        6 -> { // 20:9
-                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                            pv.setAspectRatioListener { _, _, _ -> 20f / 9f }
-                        }
-                        7 -> { // 21:9
-                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                            pv.setAspectRatioListener { _, _, _ -> 21f / 9f }
-                        }
-                        8 -> { // 16:9
-                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                            pv.setAspectRatioListener { _, _, _ -> 16f / 9f }
-                        }
-                        9 -> { // 18:9
-                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                            pv.setAspectRatioListener { _, _, _ -> 18f / 9f }
-                        }
-                    }
-                }
-                showAspectRatioDialog = false
-            },
-            onDismiss = { showAspectRatioDialog = false },
         )
     }
 }
@@ -1716,71 +1677,6 @@ data class DialogColors(
         )
     }
 }
-
-@Composable
-fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(animationSpec = tween(200)) +
-            slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(300)) +
-            slideOutVertically(targetOffsetY = { -50 }, animationSpec = tween(300)),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(top = 64.dp)
-                    .background(Color.Black.copy(alpha = 0.7f), shape = MaterialTheme.shapes.large)
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                Text(text = text, color = Color.White, style = MaterialTheme.typography.titleLarge)
-            }
-        }
-    }
-}
-
-@Composable
-fun AspectRatioSheet(
-    currentAspectRatio: Int,
-    onAspectRatioSelected: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val aspectOptions = listOf(
-        AspectRatioOption("Original (Fit)", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-        AspectRatioOption("Stretch (Fill)", AspectRatioFrameLayout.RESIZE_MODE_FILL),
-        AspectRatioOption("Crop (Zoom)", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-        AspectRatioOption("16:9", 8),
-        AspectRatioOption("18:9", 9),
-        AspectRatioOption("19:9", 5),
-        AspectRatioOption("20:9", 6),
-        AspectRatioOption("21:9", 7),
-    )
-    PlayerTrackSheet(title = "Aspect ratio", onDismiss = onDismiss) {
-        aspectOptions.forEach { option ->
-            PlayerChoiceRow(
-                label = option.label,
-                subtitle = null,
-                selected = currentAspectRatio == option.value,
-                onClick = {
-                    onAspectRatioSelected(option.value)
-                    onDismiss()
-                },
-            )
-        }
-    }
-}
-
-data class AspectRatioOption(
-    val label: String,
-    val value: Int,
-)
 
 private fun applySubtitleStyle(
     subtitleView: SubtitleView,
