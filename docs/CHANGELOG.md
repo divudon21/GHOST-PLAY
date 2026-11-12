@@ -5,6 +5,18 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.31 (beta)
+
+### Player
+- **Quality and audio are one panel again.** Hiding audio tracks from the quality
+  panel was wrong: a video's sound is part of choosing it, and the panel now lists
+  video formats and audio tracks together, each under its own heading. The
+  separate audio button stays gone — nothing needs it when quality shows both.
+- **The aspect button opened two dialogs.** The old arbitrary-ratio dialog was
+  still being composed alongside the new video-zoom panel, so one tap opened both.
+  The old one is deleted, along with its option list and the resize-mode state it
+  owned.
+
 ## 3.30 (beta)
 
 ### Player — pickers rebuilt to the reference player's own panel
