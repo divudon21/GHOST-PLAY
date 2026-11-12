@@ -5,6 +5,30 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.29 (beta)
+
+### Player — the reference player's own picker
+- **Quality, audio and subtitle selection now use media3's
+  `TrackSelectionDialogBuilder`** — the dialog the reference player shows, which
+  is media3's, not something drawn by hand: a **Video** tab and an **Audio** tab,
+  `None` and `Auto` as radios, every concrete format as a checkbox so several can
+  be pinned at once, and CANCEL / OK. The quality icon and the audio icon open the
+  same dialog on their own tab; the CC icon opens it on Text.
+- Choosing an audio or subtitle track in it is still remembered per stream, so
+  reopening the same file keeps that choice; video is deliberately not remembered,
+  because a pinned quality would survive a network change that `Auto` exists to
+  handle.
+- The app's own hand-built sheets for these three are gone; the audio-sync/pitch
+  sheet and the aspect-ratio sheet remain sheets.
+
+### Player — header
+- **A header over the controls:** a close mark, the name of what is playing, and
+  the lock on the far edge — the layout the reference player uses, and the only
+  visible way out of a full-screen route with no app bar. A local file shows its
+  display name (looked up from the media store, not the raw id); a link shows as
+  the link. It is drawn outside the controller, so it stays put when the controls
+  hide, and it disappears while locked.
+
 ## 3.28 (beta)
 
 ### Player — sheets instead of dialogs

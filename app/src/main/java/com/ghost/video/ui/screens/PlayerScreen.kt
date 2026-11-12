@@ -62,6 +62,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -79,6 +80,7 @@ import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleSpeed
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.TrackSelectionDialogBuilder
 import androidx.media3.ui.SubtitleView
 import android.graphics.Typeface
 import android.util.TypedValue
@@ -113,7 +115,11 @@ import kotlin.math.abs
 
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(url: String) {
+fun PlayerScreen(
+    url: String,
+    onExit: () -> Unit = {},
+    title: String? = null,
+) {
     val context = LocalContext.current
     val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -136,8 +142,10 @@ fun PlayerScreen(url: String) {
     var isBuffering by remember { mutableStateOf(true) }
     
     // Dialog states
-    var showQualityDialog by remember { mutableStateOf(false) }
-    var showAudioDialog by remember { mutableStateOf(false) }
+    // One dialogue, two tabs: the quality and audio buttons both open it, on the
+    // tab that was asked for.
+    var trackDialogRequested by remember { mutableStateOf(false) }
+    var initialTab by remember { mutableStateOf(TrackSelectionDialogBuilder.TAB_VIDEO) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var showAudioAdjustDialog by remember { mutableStateOf(false) }
@@ -652,6 +660,46 @@ fun PlayerScreen(url: String) {
             }
         }
     }
+    // The dialog edits the player's selection directly; this only remembers what
+    // was chosen, so the next open of the same stream restores it. Video is not
+    // remembered — an explicit quality pin would follow the stream even when the
+    // network changes, which is the one thing "Auto" exists to avoid.
+    val rememberSelectionScope = rememberCoroutineScope()
+    val subtitleDialogListener = object : TrackSelectionDialogBuilder.TrackSelectionDialogListener {
+        override fun onTrackSelection(params: TrackSelectionParameters) {
+            val textGroup = params.overrides.firstOrNull {
+                it.mediaTrackGroup.type == C.TRACK_TYPE_TEXT
+            }
+            val index = textGroup?.trackIndices?.firstOrNull()
+            val group = textGroup?.let { override ->
+                exoPlayer.currentTracks.groups.firstOrNull {
+                    it.mediaTrackGroup == override.mediaTrackGroup
+                }
+            }
+            val id = if (index != null && group != null && index < group.length) {
+                group.getTrackFormat(index).id
+            } else {
+                ""
+            }
+            rememberSelectionScope.launch { settingsRepository.saveTextTrack(url, id.orEmpty()) }
+        }
+    }
+
+    val trackSelectionDialogListener = object : TrackSelectionDialogBuilder.TrackSelectionDialogListener {
+        override fun onTrackSelection(params: TrackSelectionParameters) {
+            val audioGroup = params.overrides.firstOrNull { it.mediaTrackGroup.type == C.TRACK_TYPE_AUDIO }
+            val index = audioGroup?.trackIndices?.firstOrNull() ?: return
+            val group = exoPlayer.currentTracks.groups.firstOrNull {
+                it.mediaTrackGroup == audioGroup.mediaTrackGroup
+            } ?: return
+            if (index >= group.length) return
+            val id = group.getTrackFormat(index).id ?: return
+            rememberSelectionScope.launch {
+                settingsRepository.saveAudioTrack(url, id)
+            }
+        }
+    }
+
     val toggleMute = {
         if (exoPlayer.volume > 0f) {
             // Remember the level that was actually active: a boost above 1f is
@@ -801,7 +849,10 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showQualityDialog = true }
+                        setClickFeedback {
+                            initialTab = TrackSelectionDialogBuilder.TAB_VIDEO
+                            trackDialogRequested = true
+                        }
                     }
                     
                     // Mute / Unmute. A Media3 custom layout past the settings
@@ -840,7 +891,10 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showAudioDialog = true }
+                        setClickFeedback {
+                            initialTab = TrackSelectionDialogBuilder.TAB_AUDIO
+                            trackDialogRequested = true
+                        }
                     }
                     
                     val ccButton = android.widget.ImageView(ctx).apply {
@@ -995,6 +1049,69 @@ fun PlayerScreen(url: String) {
             modifier = Modifier.fillMaxSize()
         )
 
+        // The header the reference player shows over the controls: a close mark,
+        // the item's name beside it, and the lock on the far edge. Drawn here
+        // rather than inside the controller because it has to stay put when the
+        // controller hides — and it is the only way out of this screen that is
+        // visible, since the player is a full-screen route with no app bar.
+        if (!isLocked && !inPip) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                    .align(Alignment.TopCenter),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    onClick = onExit,
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                ) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = NextIcons.Close,
+                            contentDescription = "Close player",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title.orEmpty(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Surface(
+                    onClick = {
+                        showUnlockButton = false
+                        playerViewRef?.useController = false
+                        isLocked = true
+                    },
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                ) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Lock controls",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        }
+
         // Playback failure panel (replaces a silent black screen).
         val failure: Throwable? = playbackError ?: playbackFailure
         if (failure != null && !inPip) {
@@ -1140,35 +1257,41 @@ fun PlayerScreen(url: String) {
         }
     }
     
-    // Quality Dialog
-    if (showQualityDialog && !inPip) {
-        TrackSelectionSheet(
-            title = "Video quality",
-            exoPlayer = exoPlayer,
-            trackType = C.TRACK_TYPE_VIDEO,
-            onDismiss = { showQualityDialog = false },
+    // Quality and audio, in media3's own track-selection dialog — the one the
+    // reference player shows: a Video tab, an Audio tab, "None" and "Auto" as
+    // radios, every concrete format as a checkbox (so several can be pinned, and
+    // the player switches between them), CANCEL and OK. Both icons open the same
+    // dialog on its matching tab, which is why there is one state and a tab rather
+    // than two dialogs: it is one picker.
+    if (trackDialogRequested && !inPip) {
+        TrackSelectionDialogBuilder(
+            context,
+            "Video and audio",
+            exoPlayer,
+            initialTab,
         )
+            .setShowAutoText(false)
+            .setTrackSelectionDialogListener(trackSelectionDialogListener)
+            .build()
+            .show()
+        trackDialogRequested = false
     }
     
-    // Audio Dialog
-    if (showAudioDialog && !inPip) {
-        TrackSelectionSheet(
-            title = "Audio track",
-            exoPlayer = exoPlayer,
-            trackType = C.TRACK_TYPE_AUDIO,
-            onDismiss = { showAudioDialog = false },
-        )
-    }
     
-    
-    // Subtitle Dialog
+    // Subtitles use the same dialog, on its Text tab — the reference player's
+    // subtitle picker is that dialog too, so all three pickers are one control.
     if (showSubtitleDialog && !inPip) {
-        TrackSelectionSheet(
-            title = "Subtitles",
-            exoPlayer = exoPlayer,
-            trackType = C.TRACK_TYPE_TEXT,
-            onDismiss = { showSubtitleDialog = false },
+        TrackSelectionDialogBuilder(
+            context,
+            "Subtitles",
+            exoPlayer,
+            TrackSelectionDialogBuilder.TAB_TEXT,
         )
+            .setShowAutoText(false)
+            .setTrackSelectionDialogListener(subtitleDialogListener)
+            .build()
+            .show()
+        showSubtitleDialog = false
     }
     
     // Audio Sync / Pitch Dialog
