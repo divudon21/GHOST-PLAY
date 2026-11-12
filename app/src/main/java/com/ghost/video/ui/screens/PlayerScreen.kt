@@ -99,6 +99,7 @@ import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
 import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.ui.components.AudioAdjustSheet
+import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.PlayerChoiceRow
 import com.ghost.video.ui.components.PlayerMuteButton
 import com.ghost.video.ui.components.PlayerTrackSheet
@@ -1705,6 +1706,35 @@ data class DialogColors(
             selectedColor = selectedColor,
             selectedTextColor = selectedTextColor
         )
+    }
+}
+
+@Composable
+fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(animationSpec = tween(200)) +
+            slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(300)) +
+            slideOutVertically(targetOffsetY = { -50 }, animationSpec = tween(300)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 64.dp)
+                    .background(Color.Black.copy(alpha = 0.7f), shape = MaterialTheme.shapes.large)
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                Text(text = text, color = Color.White, style = MaterialTheme.typography.titleLarge)
+            }
+        }
     }
 }
 
