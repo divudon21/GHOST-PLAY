@@ -723,7 +723,7 @@ fun MainApp(
                 val mediaName by produceState<String?>(initialValue = null, rawUrl) {
                     value = withContext(kotlinx.coroutines.Dispatchers.IO) {
                         ghostDisplayName(
-                            context = applicationContext,
+                            context = androidx.compose.ui.platform.LocalContext.current,
                             url = rawUrl,
                         )
                     }
