@@ -1247,7 +1247,7 @@ fun PlayerScreen(
                         VideoScale.BEST_FIT ->
                             pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                         VideoScale.STRETCH ->
-                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_STRETCH
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
                         VideoScale.CROP ->
                             pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         // 100%: the picture is not scaled, whatever fits.
