@@ -5,6 +5,29 @@ Release notes on GitHub are generated from the commits between two tags
 summary of what each build actually changes. The app shows the matching
 section in **Settings → Updates** and in the "update available" dialog.
 
+## 3.30 (beta)
+
+### Player — pickers rebuilt to the reference player's own panel
+- **The pickers are Compose again, not a wrapped `View`.** The previous build
+  hosted media3's `TrackSelectionView` inside a Compose dialog; a `View` there has
+  no bounded height, so the sheet grew to the whole screen and its list could not
+  scroll. The rows are now plain Compose rows in a panel capped at 360dp that
+  scrolls inside it.
+- **Back to the reference player's margins.** Rows are that project's
+  `RadioButtonRow`: 4dp horizontal and 8dp vertical padding, 8dp between the
+  control and the label, `bodyMedium`. The wide library-side insets are gone.
+- **One panel per thing**, as in the reference: quality opens the video tracks,
+  the CC button opens subtitles, the aspect button opens the video scales. Audio
+  no longer has a button of its own — a video's audio tracks belong with its
+  quality, which is why the reference player's picker shows them there.
+- **Aspect ratio is the reference player's "Video zoom"** — Best fit, Stretch,
+  Crop, 100% — with radios, not the previous list of arbitrary ratios.
+
+### Player — controls
+- **The mute control is a plain switch.** The glyph changes between muted and
+  unmuted and nothing else moves: no rotation, no animation of its own. Its state
+  still comes from the player, so a gesture or a track switch updates it.
+
 ## 3.29 (beta)
 
 ### Player — the reference player's own picker
