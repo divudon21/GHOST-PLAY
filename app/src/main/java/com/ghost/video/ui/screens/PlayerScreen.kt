@@ -80,7 +80,6 @@ import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleSpeed
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
-import androidx.media3.ui.TrackSelectionDialogBuilder
 import androidx.media3.ui.SubtitleView
 import android.graphics.Typeface
 import android.util.TypedValue
@@ -103,6 +102,7 @@ import com.ghost.video.ui.components.AudioAdjustSheet
 import com.ghost.video.ui.components.PlayerChoiceRow
 import com.ghost.video.ui.components.PlayerMuteButton
 import com.ghost.video.ui.components.PlayerTrackSheet
+import com.ghost.video.ui.components.TabbedTrackSelectionDialog
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.CoroutineScope
@@ -144,9 +144,8 @@ fun PlayerScreen(
     // Dialog states
     // One dialogue, two tabs: the quality and audio buttons both open it, on the
     // tab that was asked for.
-    var trackDialogRequested by remember { mutableStateOf(false) }
-    var initialTab by remember { mutableStateOf(TrackSelectionDialogBuilder.TAB_VIDEO) }
-    var showSubtitleDialog by remember { mutableStateOf(false) }
+    var showTrackDialog by remember { mutableStateOf(false) }
+    var trackDialogStartType by remember { mutableIntStateOf(C.TRACK_TYPE_VIDEO) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var showAudioAdjustDialog by remember { mutableStateOf(false) }
     
@@ -660,44 +659,24 @@ fun PlayerScreen(
             }
         }
     }
-    // The dialog edits the player's selection directly; this only remembers what
-    // was chosen, so the next open of the same stream restores it. Video is not
-    // remembered — an explicit quality pin would follow the stream even when the
-    // network changes, which is the one thing "Auto" exists to avoid.
+    // "Remember the track I picked" reads the player's selection rather than the
+    // dialog's: the dialog applies its changes on OK and this listener sees the
+    // result, so nothing has to be threaded out of the dialog. Video is not
+    // remembered on purpose — a pinned quality would survive a network change,
+    // which is the one thing "Auto" exists to handle. Clearing a subtitle writes
+    // "", so "None" is a remembered choice too.
     val rememberSelectionScope = rememberCoroutineScope()
-    val subtitleDialogListener = object : TrackSelectionDialogBuilder.TrackSelectionDialogListener {
-        override fun onTrackSelection(params: TrackSelectionParameters) {
-            val textGroup = params.overrides.firstOrNull {
-                it.mediaTrackGroup.type == C.TRACK_TYPE_TEXT
-            }
-            val index = textGroup?.trackIndices?.firstOrNull()
-            val group = textGroup?.let { override ->
-                exoPlayer.currentTracks.groups.firstOrNull {
-                    it.mediaTrackGroup == override.mediaTrackGroup
+    DisposableEffect(exoPlayer, url) {
+        val listener = object : Player.Listener {
+            override fun onTrackSelectionParametersChanged(params: TrackSelectionParameters) {
+                rememberSelectionScope.launch {
+                    settingsRepository.saveAudioTrack(url, selectedFormatId(exoPlayer, C.TRACK_TYPE_AUDIO))
+                    settingsRepository.saveTextTrack(url, selectedFormatId(exoPlayer, C.TRACK_TYPE_TEXT))
                 }
             }
-            val id = if (index != null && group != null && index < group.length) {
-                group.getTrackFormat(index).id
-            } else {
-                ""
-            }
-            rememberSelectionScope.launch { settingsRepository.saveTextTrack(url, id.orEmpty()) }
         }
-    }
-
-    val trackSelectionDialogListener = object : TrackSelectionDialogBuilder.TrackSelectionDialogListener {
-        override fun onTrackSelection(params: TrackSelectionParameters) {
-            val audioGroup = params.overrides.firstOrNull { it.mediaTrackGroup.type == C.TRACK_TYPE_AUDIO }
-            val index = audioGroup?.trackIndices?.firstOrNull() ?: return
-            val group = exoPlayer.currentTracks.groups.firstOrNull {
-                it.mediaTrackGroup == audioGroup.mediaTrackGroup
-            } ?: return
-            if (index >= group.length) return
-            val id = group.getTrackFormat(index).id ?: return
-            rememberSelectionScope.launch {
-                settingsRepository.saveAudioTrack(url, id)
-            }
-        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
     }
 
     val toggleMute = {
@@ -850,8 +829,8 @@ fun PlayerScreen(
                         )
                         
                         setClickFeedback {
-                            initialTab = TrackSelectionDialogBuilder.TAB_VIDEO
-                            trackDialogRequested = true
+                            trackDialogStartType = C.TRACK_TYPE_VIDEO
+                            showTrackDialog = true
                         }
                     }
                     
@@ -892,8 +871,8 @@ fun PlayerScreen(
                         )
                         
                         setClickFeedback {
-                            initialTab = TrackSelectionDialogBuilder.TAB_AUDIO
-                            trackDialogRequested = true
+                            trackDialogStartType = C.TRACK_TYPE_AUDIO
+                            showTrackDialog = true
                         }
                     }
                     
@@ -908,7 +887,10 @@ fun PlayerScreen(
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showSubtitleDialog = true }
+                        setClickFeedback {
+                            trackDialogStartType = C.TRACK_TYPE_TEXT
+                            showTrackDialog = true
+                        }
                     }
                     
                     // Aspect Ratio Button
@@ -1257,43 +1239,18 @@ fun PlayerScreen(
         }
     }
     
-    // Quality and audio, in media3's own track-selection dialog — the one the
-    // reference player shows: a Video tab, an Audio tab, "None" and "Auto" as
-    // radios, every concrete format as a checkbox (so several can be pinned, and
-    // the player switches between them), CANCEL and OK. Both icons open the same
-    // dialog on its matching tab, which is why there is one state and a tab rather
-    // than two dialogs: it is one picker.
-    if (trackDialogRequested && !inPip) {
-        TrackSelectionDialogBuilder(
-            context,
-            "Video and audio",
-            exoPlayer,
-            initialTab,
+    // Quality, audio and subtitles: media3's tabbed track selection dialog, the
+    // one the reference player shows. Every type that has tracks gets a tab, and
+    // the icon that opened it chooses the starting tab — which is why there is one
+    // dialog and a starting type rather than three dialogs.
+    if (showTrackDialog && !inPip) {
+        TabbedTrackSelectionDialog(
+            player = exoPlayer,
+            initialTrackType = trackDialogStartType,
+            onDismissRequest = { showTrackDialog = false },
         )
-            .setShowAutoText(false)
-            .setTrackSelectionDialogListener(trackSelectionDialogListener)
-            .build()
-            .show()
-        trackDialogRequested = false
     }
-    
-    
-    // Subtitles use the same dialog, on its Text tab — the reference player's
-    // subtitle picker is that dialog too, so all three pickers are one control.
-    if (showSubtitleDialog && !inPip) {
-        TrackSelectionDialogBuilder(
-            context,
-            "Subtitles",
-            exoPlayer,
-            TrackSelectionDialogBuilder.TAB_TEXT,
-        )
-            .setShowAutoText(false)
-            .setTrackSelectionDialogListener(subtitleDialogListener)
-            .build()
-            .show()
-        showSubtitleDialog = false
-    }
-    
+
     // Audio Sync / Pitch Dialog
     if (showAudioAdjustDialog && !inPip) {
         AudioAdjustSheet(
@@ -1752,176 +1709,6 @@ data class DialogColors(
 }
 
 @Composable
-fun TrackSelectionSheet(
-    title: String,
-    exoPlayer: ExoPlayer,
-    trackType: Int,
-    onDismiss: () -> Unit,
-) {
-    val tracks = exoPlayer.currentTracks
-
-    // One entry per track of the requested type, in the order the container lists
-    // them.
-    val trackGroups = remember(tracks) {
-        buildList {
-            for (group in tracks.groups) {
-                if (group.type == trackType) {
-                    for (i in 0 until group.length) add(group to i)
-                }
-            }
-        }
-    }
-
-    fun selectOverride(group: Tracks.Group, index: Int) {
-        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(index))
-        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .setOverrideForType(override)
-            .build()
-        onDismiss()
-    }
-
-    PlayerTrackSheet(title = title, onDismiss = onDismiss) {
-        if (trackType == C.TRACK_TYPE_TEXT) {
-            val subtitlesOff = trackGroups.isEmpty() ||
-                tracks.groups.none { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
-            PlayerChoiceRow(
-                label = "None",
-                subtitle = "Disable subtitles",
-                selected = subtitlesOff,
-                onClick = {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                        .build()
-                    onDismiss()
-                },
-            )
-        }
-
-        trackGroups.forEach { (group, trackIndex) ->
-            val format = group.getTrackFormat(trackIndex)
-            val selected = group.isTrackSelected(trackIndex)
-            when (trackType) {
-                C.TRACK_TYPE_VIDEO -> {
-                    val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
-                    val fps = if (format.frameRate > 0) " • ${format.frameRate.toInt()} fps" else ""
-                    val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
-                    val label = if (format.width > 0 && format.height > 0) {
-                        "${format.width}x${format.height}$bitrate$fps"
-                    } else {
-                        format.label ?: "Video"
-                    }
-                    PlayerChoiceRow(
-                        label = label,
-                        subtitle = codec.ifEmpty { null }?.let { "Codec: $it" },
-                        selected = selected,
-                        onClick = { selectOverride(group, trackIndex) },
-                    )
-                }
-                C.TRACK_TYPE_AUDIO -> {
-                    val lang = format.language?.uppercase() ?: "Unknown"
-                    val trackLabel = format.label ?: ""
-                    val channels = when (format.channelCount) {
-                        1 -> "Mono"
-                        2 -> "Stereo"
-                        6 -> "5.1 Surround"
-                        8 -> "7.1 Surround"
-                        in 3..5 -> "${format.channelCount}ch"
-                        else -> ""
-                    }
-                    val subInfo = buildList {
-                        if (channels.isNotEmpty()) add(channels)
-                        if (format.bitrate > 0) add("${format.bitrate / 1000} kbps")
-                        if (format.sampleRate > 0) add("${format.sampleRate / 1000} kHz")
-                        format.sampleMimeType?.substringAfter("/")?.let { add(it.uppercase()) }
-                    }.joinToString(" • ")
-                    PlayerChoiceRow(
-                        label = buildString {
-                            append(lang)
-                            if (trackLabel.isNotEmpty()) append(" • $trackLabel")
-                        },
-                        subtitle = subInfo.ifEmpty { null },
-                        selected = selected,
-                        onClick = { selectOverride(group, trackIndex) },
-                    )
-                }
-                C.TRACK_TYPE_TEXT -> {
-                    val lang = format.language?.uppercase() ?: "Unknown"
-                    val trackLabel = format.label ?: ""
-                    val flags = buildList {
-                        if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) add("Forced")
-                        if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) add("SDH")
-                        if ((format.roleFlags and C.ROLE_FLAG_CAPTION) != 0) add("Caption")
-                        if ((format.roleFlags and C.ROLE_FLAG_DUB) != 0) add("Dub")
-                        if ((format.roleFlags and C.ROLE_FLAG_COMMENTARY) != 0) add("Commentary")
-                        if ((format.roleFlags and C.ROLE_FLAG_EASY_TO_READ) != 0) add("Easy Read")
-                        format.sampleMimeType?.substringAfter("/")?.let { add(it.uppercase()) }
-                    }.joinToString(" • ")
-                    PlayerChoiceRow(
-                        label = buildString {
-                            append(lang)
-                            if (trackLabel.isNotEmpty() && trackLabel != lang) append(" • $trackLabel")
-                        },
-                        subtitle = flags.ifEmpty { null },
-                        selected = selected,
-                        onClick = { selectOverride(group, trackIndex) },
-                    )
-                }
-                else -> PlayerChoiceRow(
-                    label = format.label ?: "Track $trackIndex",
-                    subtitle = null,
-                    selected = selected,
-                    onClick = { selectOverride(group, trackIndex) },
-                )
-            }
-        }
-
-        if (trackGroups.isEmpty() && trackType != C.TRACK_TYPE_TEXT) {
-            Text(
-                text = "No tracks available",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(8.dp),
-            )
-        }
-    }
-}
-
-@Composable
-fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(animationSpec = tween(200)) +
-            slideInVertically(initialOffsetY = { -50 }, animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(300)) +
-            slideOutVertically(targetOffsetY = { -50 }, animationSpec = tween(300)),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(top = 64.dp)
-                    .background(Color.Black.copy(alpha = 0.7f), shape = MaterialTheme.shapes.large)
-                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                Text(
-                    text = text,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun AspectRatioSheet(
     currentAspectRatio: Int,
     onAspectRatioSelected: (Int) -> Unit,
@@ -2003,4 +1790,19 @@ private fun applySubtitleStyle(
     if (!embeddedStyles) {
         subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, textSize.toFloat())
     }
+}
+
+/**
+ * The id of the selected track of [trackType], or "" when none is selected —
+ * which is what the settings repository stores for "None".
+ */
+@OptIn(UnstableApi::class)
+private fun selectedFormatId(player: Player, trackType: Int): String {
+    for (group in player.currentTracks.groups) {
+        if (group.type != trackType) continue
+        for (i in 0 until group.length) {
+            if (group.isTrackSelected(i)) return group.getTrackFormat(i).id.orEmpty()
+        }
+    }
+    return ""
 }
