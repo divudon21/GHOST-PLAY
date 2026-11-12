@@ -103,7 +103,9 @@ import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.PlayerChoiceRow
 import com.ghost.video.ui.components.PlayerMuteButton
 import com.ghost.video.ui.components.PlayerTrackSheet
-import com.ghost.video.ui.components.TabbedTrackSelectionDialog
+import com.ghost.video.ui.components.TrackSelectionSheet
+import com.ghost.video.ui.components.VideoScale
+import com.ghost.video.ui.components.VideoScaleSheet
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.CoroutineScope
@@ -145,8 +147,9 @@ fun PlayerScreen(
     // Dialog states
     // One dialogue, two tabs: the quality and audio buttons both open it, on the
     // tab that was asked for.
-    var showTrackDialog by remember { mutableStateOf(false) }
-    var trackDialogStartType by remember { mutableIntStateOf(C.TRACK_TYPE_VIDEO) }
+    var showTrackSheet by remember { mutableStateOf(false) }
+    var trackSheetType by remember { mutableIntStateOf(C.TRACK_TYPE_VIDEO) }
+    var currentScale by remember { mutableStateOf(VideoScale.BEST_FIT) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var showAudioAdjustDialog by remember { mutableStateOf(false) }
     
@@ -830,8 +833,8 @@ fun PlayerScreen(
                         )
                         
                         setClickFeedback {
-                            trackDialogStartType = C.TRACK_TYPE_VIDEO
-                            showTrackDialog = true
+                            trackSheetType = C.TRACK_TYPE_VIDEO
+                            showTrackSheet = true
                         }
                     }
                     
@@ -859,24 +862,6 @@ fun PlayerScreen(
                         setClickFeedback { showAudioAdjustDialog = true }
                     }
                     
-                    // Audio Track Button
-                    val audioButton = android.widget.ImageView(ctx).apply {
-                        setImageResource(R.drawable.ic_aud)
-                        val paddingPx = (12 * ctx.resources.displayMetrics.density).toInt()
-                        setPadding(paddingPx, paddingPx, paddingPx, paddingPx)
-                        visibility = View.VISIBLE
-                        
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.MATCH_PARENT
-                        )
-                        
-                        setClickFeedback {
-                            trackDialogStartType = C.TRACK_TYPE_AUDIO
-                            showTrackDialog = true
-                        }
-                    }
-                    
                     val ccButton = android.widget.ImageView(ctx).apply {
                         setImageResource(R.drawable.ic_cc)
                         val paddingPx = (12 * ctx.resources.displayMetrics.density).toInt()
@@ -889,8 +874,8 @@ fun PlayerScreen(
                         )
                         
                         setClickFeedback {
-                            trackDialogStartType = C.TRACK_TYPE_TEXT
-                            showTrackDialog = true
+                            trackSheetType = C.TRACK_TYPE_TEXT
+                            showTrackSheet = true
                         }
                     }
                     
@@ -973,10 +958,9 @@ fun PlayerScreen(
                         basicControls.addView(pipButton, insertIndex + 1)
                         basicControls.addView(aspectButton, insertIndex + 2)
                         basicControls.addView(ccButton, insertIndex + 3)
-                        basicControls.addView(audioButton, insertIndex + 4)
-                        basicControls.addView(audioAdjustButton, insertIndex + 5)
-                        basicControls.addView(muteHost, insertIndex + 6)
-                        basicControls.addView(qualityButton, insertIndex + 7)
+                        basicControls.addView(audioAdjustButton, insertIndex + 4)
+                        basicControls.addView(muteHost, insertIndex + 5)
+                        basicControls.addView(qualityButton, insertIndex + 6)
                     }
                     
                     // Gesture handling - Using a wrapper class to properly handle lock state
@@ -1240,15 +1224,39 @@ fun PlayerScreen(
         }
     }
     
-    // Quality, audio and subtitles: media3's tabbed track selection dialog, the
-    // one the reference player shows. Every type that has tracks gets a tab, and
-    // the icon that opened it chooses the starting tab — which is why there is one
-    // dialog and a starting type rather than three dialogs.
-    if (showTrackDialog && !inPip) {
-        TabbedTrackSelectionDialog(
+    // One panel per thing, as the reference player does it: the quality button
+    // opens the video tracks, the CC button the subtitles, and the aspect button
+    // the video scales. Audio has no button of its own — a video's audio tracks
+    // are part of its quality, and the panel lists them wherever quality is
+    // opened.
+    if (showTrackSheet && !inPip) {
+        TrackSelectionSheet(
             player = exoPlayer,
-            initialTrackType = trackDialogStartType,
-            onDismissRequest = { showTrackDialog = false },
+            trackType = trackSheetType,
+            onDismiss = { showTrackSheet = false },
+        )
+    }
+
+    if (showAspectRatioDialog && !inPip) {
+        VideoScaleSheet(
+            current = currentScale,
+            onChange = { scale ->
+                currentScale = scale
+                playerViewRef?.let { pv ->
+                    when (scale) {
+                        VideoScale.BEST_FIT ->
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        VideoScale.STRETCH ->
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        VideoScale.CROP ->
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        // 100%: the picture is not scaled, whatever fits.
+                        VideoScale.HUNDRED_PERCENT ->
+                            pv.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                    }
+                }
+            },
+            onDismiss = { showAspectRatioDialog = false },
         )
     }
 

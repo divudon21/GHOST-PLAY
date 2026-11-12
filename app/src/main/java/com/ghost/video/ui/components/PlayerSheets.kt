@@ -1,7 +1,5 @@
 package com.ghost.video.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -289,10 +286,12 @@ fun PlayerChoiceRow(
 /**
  * The mute control, on the player's control row.
  *
- * It changes its glyph with the state and turns over as it does, so the new state
- * is the thing you watch happen rather than a swap between two drawings. The
- * glyphs are Material 3's `VolumeOff` / `VolumeUp`, not the hand-drawn vectors
- * this used to set as a drawable resource.
+ * A plain switch: the glyph is Material 3's `VolumeOff` / `VolumeUp` and it
+ * changes when the state changes. No rotation, no cross-fade, no other movement —
+ * there is nothing here beyond what the reference player's own control row does,
+ * and a control that moves under the thumb is a control that is harder to hit.
+ * Its state comes from the player, so a volume change from a gesture or a track
+ * switch is reflected here too.
  */
 @Composable
 fun PlayerMuteButton(
@@ -300,18 +299,11 @@ fun PlayerMuteButton(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val turn by animateFloatAsState(
-        targetValue = if (muted) 180f else 0f,
-        animationSpec = spring(),
-        label = "muteTurn",
-    )
     FilledTonalIconButton(onClick = onToggle, modifier = modifier.size(40.dp)) {
         Icon(
             imageVector = if (muted) NextIcons.VolumeOff else NextIcons.VolumeUp,
             contentDescription = if (muted) "Unmute" else "Mute",
-            modifier = Modifier
-                .size(22.dp)
-                .graphicsLayer { rotationZ = turn },
+            modifier = Modifier.size(22.dp),
         )
     }
 }
