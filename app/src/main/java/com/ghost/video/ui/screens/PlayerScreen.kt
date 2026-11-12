@@ -62,6 +62,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -98,9 +99,11 @@ import com.ghost.video.data.ThemePreference
 import com.ghost.video.ui.theme.getColorScheme
 import com.ghost.video.ui.components.AppLoadingIndicator
 import com.ghost.video.ui.components.AudioAdjustSheet
+import com.ghost.video.ui.components.NextIcons
 import com.ghost.video.ui.components.PlayerChoiceRow
 import com.ghost.video.ui.components.PlayerMuteButton
 import com.ghost.video.ui.components.PlayerTrackSheet
+import com.ghost.video.ui.components.TabbedTrackSelectionDialog
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.CoroutineScope
@@ -113,7 +116,11 @@ import kotlin.math.abs
 
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(url: String) {
+fun PlayerScreen(
+    url: String,
+    onExit: () -> Unit = {},
+    title: String? = null,
+) {
     val context = LocalContext.current
     val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -136,9 +143,10 @@ fun PlayerScreen(url: String) {
     var isBuffering by remember { mutableStateOf(true) }
     
     // Dialog states
-    var showQualityDialog by remember { mutableStateOf(false) }
-    var showAudioDialog by remember { mutableStateOf(false) }
-    var showSubtitleDialog by remember { mutableStateOf(false) }
+    // One dialogue, two tabs: the quality and audio buttons both open it, on the
+    // tab that was asked for.
+    var showTrackDialog by remember { mutableStateOf(false) }
+    var trackDialogStartType by remember { mutableIntStateOf(C.TRACK_TYPE_VIDEO) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
     var showAudioAdjustDialog by remember { mutableStateOf(false) }
     
@@ -652,6 +660,26 @@ fun PlayerScreen(url: String) {
             }
         }
     }
+    // "Remember the track I picked" reads the player's selection rather than the
+    // dialog's: the dialog applies its changes on OK and this listener sees the
+    // result, so nothing has to be threaded out of the dialog. Video is not
+    // remembered on purpose — a pinned quality would survive a network change,
+    // which is the one thing "Auto" exists to handle. Clearing a subtitle writes
+    // "", so "None" is a remembered choice too.
+    val rememberSelectionScope = rememberCoroutineScope()
+    DisposableEffect(exoPlayer, url) {
+        val listener = object : Player.Listener {
+            override fun onTrackSelectionParametersChanged(params: TrackSelectionParameters) {
+                rememberSelectionScope.launch {
+                    settingsRepository.saveAudioTrack(url, selectedFormatId(exoPlayer, C.TRACK_TYPE_AUDIO))
+                    settingsRepository.saveTextTrack(url, selectedFormatId(exoPlayer, C.TRACK_TYPE_TEXT))
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
+    }
+
     val toggleMute = {
         if (exoPlayer.volume > 0f) {
             // Remember the level that was actually active: a boost above 1f is
@@ -801,7 +829,10 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showQualityDialog = true }
+                        setClickFeedback {
+                            trackDialogStartType = C.TRACK_TYPE_VIDEO
+                            showTrackDialog = true
+                        }
                     }
                     
                     // Mute / Unmute. A Media3 custom layout past the settings
@@ -840,7 +871,10 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showAudioDialog = true }
+                        setClickFeedback {
+                            trackDialogStartType = C.TRACK_TYPE_AUDIO
+                            showTrackDialog = true
+                        }
                     }
                     
                     val ccButton = android.widget.ImageView(ctx).apply {
@@ -854,7 +888,10 @@ fun PlayerScreen(url: String) {
                             LinearLayout.LayoutParams.MATCH_PARENT
                         )
                         
-                        setClickFeedback { showSubtitleDialog = true }
+                        setClickFeedback {
+                            trackDialogStartType = C.TRACK_TYPE_TEXT
+                            showTrackDialog = true
+                        }
                     }
                     
                     // Aspect Ratio Button
@@ -994,6 +1031,69 @@ fun PlayerScreen(url: String) {
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // The header the reference player shows over the controls: a close mark,
+        // the item's name beside it, and the lock on the far edge. Drawn here
+        // rather than inside the controller because it has to stay put when the
+        // controller hides — and it is the only way out of this screen that is
+        // visible, since the player is a full-screen route with no app bar.
+        if (!isLocked && !inPip) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                    .align(Alignment.TopCenter),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    onClick = onExit,
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                ) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = NextIcons.Close,
+                            contentDescription = "Close player",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title.orEmpty(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Surface(
+                    onClick = {
+                        showUnlockButton = false
+                        playerViewRef?.useController = false
+                        isLocked = true
+                    },
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                ) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Lock controls",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        }
 
         // Playback failure panel (replaces a silent black screen).
         val failure: Throwable? = playbackError ?: playbackFailure
@@ -1140,37 +1240,18 @@ fun PlayerScreen(url: String) {
         }
     }
     
-    // Quality Dialog
-    if (showQualityDialog && !inPip) {
-        TrackSelectionSheet(
-            title = "Video quality",
-            exoPlayer = exoPlayer,
-            trackType = C.TRACK_TYPE_VIDEO,
-            onDismiss = { showQualityDialog = false },
+    // Quality, audio and subtitles: media3's tabbed track selection dialog, the
+    // one the reference player shows. Every type that has tracks gets a tab, and
+    // the icon that opened it chooses the starting tab — which is why there is one
+    // dialog and a starting type rather than three dialogs.
+    if (showTrackDialog && !inPip) {
+        TabbedTrackSelectionDialog(
+            player = exoPlayer,
+            initialTrackType = trackDialogStartType,
+            onDismissRequest = { showTrackDialog = false },
         )
     }
-    
-    // Audio Dialog
-    if (showAudioDialog && !inPip) {
-        TrackSelectionSheet(
-            title = "Audio track",
-            exoPlayer = exoPlayer,
-            trackType = C.TRACK_TYPE_AUDIO,
-            onDismiss = { showAudioDialog = false },
-        )
-    }
-    
-    
-    // Subtitle Dialog
-    if (showSubtitleDialog && !inPip) {
-        TrackSelectionSheet(
-            title = "Subtitles",
-            exoPlayer = exoPlayer,
-            trackType = C.TRACK_TYPE_TEXT,
-            onDismiss = { showSubtitleDialog = false },
-        )
-    }
-    
+
     // Audio Sync / Pitch Dialog
     if (showAudioAdjustDialog && !inPip) {
         AudioAdjustSheet(
@@ -1629,143 +1710,6 @@ data class DialogColors(
 }
 
 @Composable
-fun TrackSelectionSheet(
-    title: String,
-    exoPlayer: ExoPlayer,
-    trackType: Int,
-    onDismiss: () -> Unit,
-) {
-    val tracks = exoPlayer.currentTracks
-
-    // One entry per track of the requested type, in the order the container lists
-    // them.
-    val trackGroups = remember(tracks) {
-        buildList {
-            for (group in tracks.groups) {
-                if (group.type == trackType) {
-                    for (i in 0 until group.length) add(group to i)
-                }
-            }
-        }
-    }
-
-    fun selectOverride(group: Tracks.Group, index: Int) {
-        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(index))
-        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .setOverrideForType(override)
-            .build()
-        onDismiss()
-    }
-
-    PlayerTrackSheet(title = title, onDismiss = onDismiss) {
-        if (trackType == C.TRACK_TYPE_TEXT) {
-            val subtitlesOff = trackGroups.isEmpty() ||
-                tracks.groups.none { it.type == C.TRACK_TYPE_TEXT && it.isSelected }
-            PlayerChoiceRow(
-                label = "None",
-                subtitle = "Disable subtitles",
-                selected = subtitlesOff,
-                onClick = {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                        .build()
-                    onDismiss()
-                },
-            )
-        }
-
-        trackGroups.forEach { (group, trackIndex) ->
-            val format = group.getTrackFormat(trackIndex)
-            val selected = group.isTrackSelected(trackIndex)
-            when (trackType) {
-                C.TRACK_TYPE_VIDEO -> {
-                    val bitrate = if (format.bitrate > 0) " • ${format.bitrate / 1000} kbps" else ""
-                    val fps = if (format.frameRate > 0) " • ${format.frameRate.toInt()} fps" else ""
-                    val codec = format.sampleMimeType?.substringAfter("/")?.uppercase() ?: ""
-                    val label = if (format.width > 0 && format.height > 0) {
-                        "${format.width}x${format.height}$bitrate$fps"
-                    } else {
-                        format.label ?: "Video"
-                    }
-                    PlayerChoiceRow(
-                        label = label,
-                        subtitle = codec.ifEmpty { null }?.let { "Codec: $it" },
-                        selected = selected,
-                        onClick = { selectOverride(group, trackIndex) },
-                    )
-                }
-                C.TRACK_TYPE_AUDIO -> {
-                    val lang = format.language?.uppercase() ?: "Unknown"
-                    val trackLabel = format.label ?: ""
-                    val channels = when (format.channelCount) {
-                        1 -> "Mono"
-                        2 -> "Stereo"
-                        6 -> "5.1 Surround"
-                        8 -> "7.1 Surround"
-                        in 3..5 -> "${format.channelCount}ch"
-                        else -> ""
-                    }
-                    val subInfo = buildList {
-                        if (channels.isNotEmpty()) add(channels)
-                        if (format.bitrate > 0) add("${format.bitrate / 1000} kbps")
-                        if (format.sampleRate > 0) add("${format.sampleRate / 1000} kHz")
-                        format.sampleMimeType?.substringAfter("/")?.let { add(it.uppercase()) }
-                    }.joinToString(" • ")
-                    PlayerChoiceRow(
-                        label = buildString {
-                            append(lang)
-                            if (trackLabel.isNotEmpty()) append(" • $trackLabel")
-                        },
-                        subtitle = subInfo.ifEmpty { null },
-                        selected = selected,
-                        onClick = { selectOverride(group, trackIndex) },
-                    )
-                }
-                C.TRACK_TYPE_TEXT -> {
-                    val lang = format.language?.uppercase() ?: "Unknown"
-                    val trackLabel = format.label ?: ""
-                    val flags = buildList {
-                        if ((format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0) add("Forced")
-                        if ((format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0) add("SDH")
-                        if ((format.roleFlags and C.ROLE_FLAG_CAPTION) != 0) add("Caption")
-                        if ((format.roleFlags and C.ROLE_FLAG_DUB) != 0) add("Dub")
-                        if ((format.roleFlags and C.ROLE_FLAG_COMMENTARY) != 0) add("Commentary")
-                        if ((format.roleFlags and C.ROLE_FLAG_EASY_TO_READ) != 0) add("Easy Read")
-                        format.sampleMimeType?.substringAfter("/")?.let { add(it.uppercase()) }
-                    }.joinToString(" • ")
-                    PlayerChoiceRow(
-                        label = buildString {
-                            append(lang)
-                            if (trackLabel.isNotEmpty() && trackLabel != lang) append(" • $trackLabel")
-                        },
-                        subtitle = flags.ifEmpty { null },
-                        selected = selected,
-                        onClick = { selectOverride(group, trackIndex) },
-                    )
-                }
-                else -> PlayerChoiceRow(
-                    label = format.label ?: "Track $trackIndex",
-                    subtitle = null,
-                    selected = selected,
-                    onClick = { selectOverride(group, trackIndex) },
-                )
-            }
-        }
-
-        if (trackGroups.isEmpty() && trackType != C.TRACK_TYPE_TEXT) {
-            Text(
-                text = "No tracks available",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(8.dp),
-            )
-        }
-    }
-}
-
-@Composable
 fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
     AnimatedVisibility(
         visible = isVisible,
@@ -1788,11 +1732,7 @@ fun IndicatorOverlay(icon: ImageVector, text: String, isVisible: Boolean) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                Text(
-                    text = text,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Text(text = text, color = Color.White, style = MaterialTheme.typography.titleLarge)
             }
         }
     }
@@ -1880,4 +1820,19 @@ private fun applySubtitleStyle(
     if (!embeddedStyles) {
         subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, textSize.toFloat())
     }
+}
+
+/**
+ * The id of the selected track of [trackType], or "" when none is selected —
+ * which is what the settings repository stores for "None".
+ */
+@OptIn(UnstableApi::class)
+private fun selectedFormatId(player: Player, trackType: Int): String {
+    for (group in player.currentTracks.groups) {
+        if (group.type != trackType) continue
+        for (i in 0 until group.length) {
+            if (group.isTrackSelected(i)) return group.getTrackFormat(i).id.orEmpty()
+        }
+    }
+    return ""
 }

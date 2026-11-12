@@ -58,6 +58,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.ghost.video.viewmodel.AudioViewModel
 import com.ghost.video.ui.components.LocalMiniPlayerVisible
 import com.ghost.video.ui.screens.AudioPlayerScreen
@@ -109,6 +110,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
 import java.net.URLEncoder
@@ -713,7 +715,22 @@ fun MainApp(
                 popExitTransition = { FADE_OUT }
             ) { backStackEntry ->
                 val url = backStackEntry.arguments?.getString("url") ?: ""
-                PlayerScreen(url = normalizeRouteUrl(url))
+                // The player route is full screen with no app bar, so its own
+                // header carries the way out and the name of what is playing. A
+                // content:// item's last path segment is its media id, not a
+                // name, so the name is looked up; a link shows as the link.
+                val rawUrl = normalizeRouteUrl(url)
+                val playerContext = androidx.compose.ui.platform.LocalContext.current
+                val mediaName by produceState<String?>(initialValue = null, rawUrl) {
+                    value = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        ghostDisplayName(context = playerContext, url = rawUrl)
+                    }
+                }
+                PlayerScreen(
+                    url = rawUrl,
+                    onExit = { navController.popBackStack() },
+                    title = mediaName,
+                )
             }
         }
         }
@@ -971,4 +988,24 @@ private fun UpdatesGate(viewModel: UpdatesViewModel) {
             },
         )
     }
+}
+
+/**
+ * A display name for what the player is showing.
+ *
+ * A `content://` video resolves to its `DISPLAY_NAME`; anything else (a stream
+ * link) is shown as the link itself, because that is all it is called. Never
+ * throws: a title is cosmetic and must not take the player down with it.
+ */
+private fun ghostDisplayName(context: android.content.Context, url: String): String? {
+    if (!url.startsWith("content://")) return url
+    return runCatching {
+        context.contentResolver.query(
+            android.net.Uri.parse(url),
+            arrayOf(android.provider.MediaStore.Video.Media.DISPLAY_NAME),
+            null, null, null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+    }.getOrNull() ?: url.substringAfterLast('/')
 }
