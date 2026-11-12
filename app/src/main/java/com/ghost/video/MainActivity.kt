@@ -722,7 +722,10 @@ fun MainApp(
                 val rawUrl = normalizeRouteUrl(url)
                 val mediaName by produceState<String?>(initialValue = null, rawUrl) {
                     value = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        ghostDisplayName(context = this@MainActivity, url = rawUrl)
+                        ghostDisplayName(
+                            context = applicationContext,
+                            url = rawUrl,
+                        )
                     }
                 }
                 PlayerScreen(

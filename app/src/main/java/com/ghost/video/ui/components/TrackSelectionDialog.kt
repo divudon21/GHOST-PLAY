@@ -182,7 +182,7 @@ fun TabbedTrackSelectionDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, top = 4.dp),
+                        .padding(start = 8.dp, end = 8.dp, top = 4.dp),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
