@@ -720,12 +720,10 @@ fun MainApp(
                 // content:// item's last path segment is its media id, not a
                 // name, so the name is looked up; a link shows as the link.
                 val rawUrl = normalizeRouteUrl(url)
+                val playerContext = androidx.compose.ui.platform.LocalContext.current
                 val mediaName by produceState<String?>(initialValue = null, rawUrl) {
                     value = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        ghostDisplayName(
-                            context = androidx.compose.ui.platform.LocalContext.current,
-                            url = rawUrl,
-                        )
+                        ghostDisplayName(context = playerContext, url = rawUrl)
                     }
                 }
                 PlayerScreen(
